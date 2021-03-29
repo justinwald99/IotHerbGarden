@@ -6,10 +6,10 @@ from utils.ui_elements import make_gauge
 layout = [
     html.Div(
         [
-            html.H1("Overview", className="card-title"),
+            html.H1("Overview", className="card-header"),
             html.Div(
                 [
-                    html.H2("Ambient", className="card-subtitle"),
+                    html.H2("Ambient", className="card-title"),
                     html.Div(
                         [
                             dcc.Graph(figure=make_gauge("Temperature", 90, "° F", [0, 100], "#dc3545"), className="col-md-3"),
@@ -22,7 +22,7 @@ layout = [
                 className="card-body"
             )
         ],
-        className="container card m-1"
+        className="card m-1"
     )
 
 ]
