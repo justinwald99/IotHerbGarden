@@ -12,7 +12,7 @@ layout = [
                     html.H2("Ambient", className="card-title"),
                     html.Div(
                         [
-                            dcc.Graph(figure=make_gauge("Temperature", 90, "° F", [0, 100], "#dc3545"), className="col-md-3"),
+                            dcc.Graph(figure=make_gauge("Temperature", 90, "° F", [0, 100], "#dc3545"), className="col-md-3"), ## TODO Insert correct values obtained from sensor
                             dcc.Graph(figure=make_gauge("Relative Humidity", 70, "%", [0, 100], "#17a2b8"), className="col-md-3")
                         ],
                         className="row"
