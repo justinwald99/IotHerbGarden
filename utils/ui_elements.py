@@ -1,4 +1,7 @@
+import plotly.express as px
 import plotly.graph_objects as go
+import pandas as pd
+
 
 def make_gauge(title, value, suffix, range, color):
     return go.Figure(
@@ -22,7 +25,7 @@ def make_gauge(title, value, suffix, range, color):
                 }
             },
             number={
-                "suffix":suffix
+                "suffix": suffix
             }
         ),
         layout={
@@ -35,3 +38,12 @@ def make_gauge(title, value, suffix, range, color):
             }
         }
     )
+
+
+def history_graph():
+    df = pd.read_csv("data/example_data.csv")
+    fig = go.Figure()
+    for sensor in df["sensor_name"].unique():
+        sensor_df = df.loc[df['sensor_name'] == sensor]
+        fig.add_trace(go.Scatter(x=sensor_df["timestamp"], y=sensor_df["value"]))
+    return fig
