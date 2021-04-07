@@ -21,7 +21,7 @@ layout = [
                 className="card-body"
             )
         ],
-        className="card m-1"
+        className="card m-2"
     )
 
 ]
