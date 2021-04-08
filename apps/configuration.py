@@ -11,6 +11,12 @@ sensors = {'Sensor1', 'Sensor2', 'Sensor3', 'Sensor4'}
 pumps = {'Pump1', 'Pump2', 'Pump3', 'Pump4'}
 rates = {'second', 'minute', 'hour'}
 
+rate_mapping = {
+    'second':1,
+    'minute':60,
+    'hour':3600
+}
+
 # def get_mqtt_data() TODO: Auto-populate fields using MQTT
 
 def getPlantPayload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
@@ -206,11 +212,23 @@ def cancelSensors(n_clicks):
 
 @app.callback(
     Output('sensors_out', 'children'),
-    Input('save_sensors', 'n_clicks')
+    Input('save_sensors', 'n_clicks'),
+    State('sensorDropdown', 'value'),
+    State('sensorName', 'value'),
+    State('sensor_name', 'value'),
+    State('samples', 'value'),
+    State('rate', 'value')
 )
-def saveSensors(n_clicks):
+def saveSensors(n_clicks, sensorDropdown, sensorName, sensor_name, samples, rate):
     # TODO error check the form data
     # TODO mqtt message with all sensor data from form
     if (n_clicks > 0):
+        if samples < 0:
+            return html.H5("Invalid samples (>0)", id="sensors_out_text")
+        time_between_samples = samples / rate_mapping[rate]
+        publish.single(topic=f"sensors/config/{sensorDropdown}", payload=json.dumps({"name":sensor_name, "sample_rate":time_between_samples}),
+            qos=2, retain=True, hostname="192.168.1.182", port=1883)
+         ## TODO: sensorDropdown probably isn't what we want here, but they're all the same type so I'm unsure of what to put for {type}
+         ## also, what is the difference between sensorName and sensor_name? I passed sensor_name to the payload, so change it if it's wrong :)
         return html.H5("Sensors saved", id="sensors_out_text")
     return None
