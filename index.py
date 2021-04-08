@@ -23,7 +23,8 @@ app.layout = html.Div([
     navbar,
     dcc.Location(id='url', refresh=False),
     html.Div(id='page-content', className="container")
-])
+    ]
+)
 
 
 @app.callback(Output('page-content', 'children'),
@@ -46,6 +47,7 @@ def display_page(pathname):
                 html.P(f"The pathname {pathname} was not recognised..."),
             ]
         )
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
