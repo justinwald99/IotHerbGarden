@@ -1,14 +1,22 @@
 import dash_html_components as html
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output
-
+from dash.dependencies import Input, Output, State
+import paho.mqtt.publish as publish
+import json
 from app import app
 
 plants = {'PlantId1', 'PlantId2', 'PlantId3', 'PlantId4'}
 sensors = {'Sensor1', 'Sensor2', 'Sensor3', 'Sensor4'}
 pumps = {'Pump1', 'Pump2', 'Pump3', 'Pump4'}
 rates = {'second', 'minute', 'hour'}
+
+# def get_mqtt_data() TODO: Auto-populate fields using MQTT
+
+def getPlantPayload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
+    return json.dumps({ "name":name, "sensor":humiditySensor, "pump":pump, "target":targetHumidity,
+     "watering_cooldown":wateringCooldown, "watering_duration":wateringDuration, "humidity_tolerance":humidityTolerance})
+
 
 layout = [
     html.H1("Configuration"),
@@ -151,13 +159,35 @@ def cancelPlants(n_clicks):
 
 @app.callback(
     Output('plants_out', 'children'),
-    Input('save_plants', 'n_clicks')
+    Input('save_plants', 'n_clicks'),
+    State('plantDropdown', 'value'), # save plant id
+    State('name', 'value'), # save plant name
+    State('humiditySensor', 'value'), # save humidity sensor
+    State('pump', 'value'), # save pump
+    State('targetHumidity', 'value'), #save target humidity
+    State('wateringCooldown', 'value'), #save watering cooldown
+    State('wateringDuration', 'value'), # save watering duration
+    State('humidityTolerance', 'value') # save humidity tolerance
 )
-def savePlants(n_clicks):
-    # TODO error check the form data
+def savePlants(n_clicks, plantDropdown, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
     # TODO mqtt message with all plant data from form
+    invalidReturnString = ""
     if (n_clicks > 0):
-        return html.H5("Plants saved", id="plants_out_text")
+        if targetHumidity < 0 or targetHumidity > 100:
+            invalidReturnString += "Invalid Target Humidity [0,100]\n"
+        if wateringCooldown < 0:
+            invalidReturnString += "Invalid Watering Cooldown >0\n"
+        if wateringDuration <= 0 or wateringDuration > 5:
+            invalidReturnString += "Invalid Watering Duration (0,5]\n"
+        if humidityTolerance > 50 or humidityTolerance < 0:
+            invalidReturnString += "Invalid Humidity Tolerance [0,50]\n"
+        if invalidReturnString == "":
+            publish.single(f"plants/config/{plantDropdown}", payload=getPlantPayload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
+                qos=2, retain=True, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
+                port=1883) ## TODO: note that the plantDropdown values probably don't store what we want it to
+            return html.H5("Plants saved", id="plants_out_text")
+        else:
+            return html.H5(invalidReturnString, id="plants_out_text")
     return None
 
 
