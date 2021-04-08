@@ -1,4 +1,6 @@
 import dash
+import paho.mqtt.client as mqtt
+import paho.mqtt.publish as publish
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output
@@ -234,6 +236,17 @@ def clear_form(n_clicks):
     Input('pump4_time', 'value'))
 def perform_pump(n_clicks, pump1, pump2, pump3, pump4):
     if n_clicks > 0:
-        ## TODO: PERFORM MQTT REQUEST BASED ON VALUES, if MQTT fails return an error message
+        if pump1 > 0:
+            publish.single("pumps/control/1", payload=pump1, qos=2, retain=False, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
+                port=1883)
+        if pump2 > 0:
+            publish.single("pumps/control/2", payload=pump1, qos=2, retain=False, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
+                port=1883)
+        if pump3 > 0:
+            publish.single("pumps/control/3", payload=pump1, qos=2, retain=False, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
+                port=1883)
+        if pump4 > 0:
+            publish.single("pumps/control/4", payload=pump1, qos=2, retain=False, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
+                port=1883)
         return "Performing manual pump.."
     return ""
