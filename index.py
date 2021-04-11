@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
-
+import sys
 from app import app
 from apps import configuration, controls, history, overview
 
@@ -50,4 +50,6 @@ def display_page(pathname):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        raise ValueError("Please execute the program: python3 index.py <MQTT_IP>")
     app.run_server(debug=True)
