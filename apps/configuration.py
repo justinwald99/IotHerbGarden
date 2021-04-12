@@ -6,20 +6,20 @@ import paho.mqtt.publish as publish
 import json
 from app import app
 
-plants = {'PlantId1', 'PlantId2', 'PlantId3', 'PlantId4'}
-sensors = {'Sensor1', 'Sensor2', 'Sensor3', 'Sensor4'}
-pumps = {'Pump1', 'Pump2', 'Pump3', 'Pump4'}
-rates = {'second', 'minute', 'hour'}
+plants = ['PlantId1', 'PlantId2', 'PlantId3', 'PlantId4']
+sensors = ['Sensor1', 'Sensor2', 'Sensor3', 'Sensor4']
+pumps = ['Pump1', 'Pump2', 'Pump3', 'Pump4']
+rates = ['second', 'minute', 'hour']
 
 rate_mapping = {
-    'second':1,
-    'minute':60,
-    'hour':3600
+    'second': 1,
+    'minute': 60,
+    'hour': 3600
 }
 
 # def get_mqtt_data() TODO: Auto-populate fields using MQTT
 
-def getPlantPayload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
+def get_plant_payload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
     return json.dumps({ "name":name, "sensor":humiditySensor, "pump":pump, "target":targetHumidity,
      "watering_cooldown":wateringCooldown, "watering_duration":wateringDuration, "humidity_tolerance":humidityTolerance})
 
@@ -112,13 +112,13 @@ layout = [
                         [
                             dbc.InputGroup([
                                 html.H5("Name", className="col-md-3"),
-                                dcc.Input(id="sensorName", type="text",
+                                dcc.Input(id="sensor_label", type="text",
                                           placeholder="getFromDB", className="col-md-3")
                             ], className="py-2"),
                             dbc.InputGroup([
-                                html.H5("sensor_name", className="col-md-3"),
+                                html.H5("sensor_id", className="col-md-3"),
                                 dbc.Select(
-                                    id='sensor_name',
+                                    id='sensor_id',
                                     options=[{'label': sensor, 'value': sensor} for sensor in sensors],
                                     className="col-md-3"
                                 )
@@ -176,7 +176,6 @@ def cancelPlants(n_clicks):
     State('humidityTolerance', 'value') # save humidity tolerance
 )
 def savePlants(n_clicks, plantDropdown, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
-    # TODO mqtt message with all plant data from form
     invalidReturnString = ""
     if (n_clicks > 0):
         if targetHumidity < 0 or targetHumidity > 100:
@@ -188,7 +187,7 @@ def savePlants(n_clicks, plantDropdown, name, humiditySensor, pump, targetHumidi
         if humidityTolerance > 50 or humidityTolerance < 0:
             invalidReturnString += "Invalid Humidity Tolerance [0,50]\n"
         if invalidReturnString == "":
-            publish.single(f"plants/config/{plantDropdown}", payload=getPlantPayload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
+            publish.single(f"plants/config/{plantDropdown}", payload=get_plant_payload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
                 qos=2, retain=True, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
                 port=1883) ## TODO: note that the plantDropdown values probably don't store what we want it to
             return html.H5("Plants saved", id="plants_out_text")
@@ -199,8 +198,8 @@ def savePlants(n_clicks, plantDropdown, name, humiditySensor, pump, targetHumidi
 
 @app.callback(
     Output('sensorDropdown', 'value'),
-    Output('sensorName', 'value'),
-    Output('sensor_name', 'value'),
+    Output('sensor_label', 'value'),
+    Output('sensor_id', 'value'),
     Output('samples', 'value'),
     Output('rate', 'value'),
     Output('save_sensors', 'n_clicks'),
@@ -214,21 +213,20 @@ def cancelSensors(n_clicks):
     Output('sensors_out', 'children'),
     Input('save_sensors', 'n_clicks'),
     State('sensorDropdown', 'value'),
-    State('sensorName', 'value'),
-    State('sensor_name', 'value'),
+    State('sensor_label', 'value'),
+    State('sensor_id', 'value'),
     State('samples', 'value'),
     State('rate', 'value')
 )
-def saveSensors(n_clicks, sensorDropdown, sensorName, sensor_name, samples, rate):
-    # TODO error check the form data
-    # TODO mqtt message with all sensor data from form
+def saveSensors(n_clicks, sensorDropdown, sensor_label, sensor_id, samples, rate):
+    # TODO Autofill
     if (n_clicks > 0):
         if samples < 0:
             return html.H5("Invalid samples (>0)", id="sensors_out_text")
         time_between_samples = samples / rate_mapping[rate]
-        publish.single(topic=f"sensors/config/{sensorDropdown}", payload=json.dumps({"name":sensor_name, "sample_rate":time_between_samples}),
+        publish.single(topic=f"sensors/config/{sensorDropdown}", payload=json.dumps({"name":sensor_id, "sample_rate":time_between_samples}),
             qos=2, retain=True, hostname="192.168.1.182", port=1883)
          ## TODO: sensorDropdown probably isn't what we want here, but they're all the same type so I'm unsure of what to put for {type}
-         ## also, what is the difference between sensorName and sensor_name? I passed sensor_name to the payload, so change it if it's wrong :)
+         ## also, what is the difference between sensor_label and sensor_id? I passed sensor_id to the payload, so change it if it's wrong :)
         return html.H5("Sensors saved", id="sensors_out_text")
     return None

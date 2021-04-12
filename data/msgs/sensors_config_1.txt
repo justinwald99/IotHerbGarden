@@ -1,0 +1,7 @@
+{
+    "id": 1,
+    "type": "humidity",
+    "name": "humidity_1",
+    "unit": "%",
+    "sample_gap": 10
+}

@@ -1,0 +1,10 @@
+{
+    "id": 1,
+    "name": "Rosemary",
+    "humidity_sensor_id": 1,
+    "pump_id": 1,
+    "target": 56,
+    "watering_cooldown": 60,
+    "watering_duration": 3,
+    "humidity_tolerance": 5
+}
