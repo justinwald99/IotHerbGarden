@@ -118,6 +118,7 @@ if (__name__ == "__main__"):
     client.message_callback_add("pumps/control/+", handle_pumps_control)
     client.on_connect = on_connect
 
+    # Create the last will for garden_manager
     client.will_set("status/garden_manager", payload="offline", qos=2, retain=True)
 
     # Create connection to MQTT broker

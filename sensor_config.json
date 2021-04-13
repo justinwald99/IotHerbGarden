@@ -1,0 +1,51 @@
+{
+    "1": {
+        "id": 1,
+        "type": "soil_humidity",
+        "name": "humidity_1",
+        "unit": "%",
+        "sample_gap": 15
+    },
+    "2": {
+        "id": 2,
+        "type": "soil_humidity",
+        "name": "humidity_2",
+        "unit": "%",
+        "sample_gap": 15
+    },
+    "3": {
+        "id": 3,
+        "type": "soil_humidity",
+        "name": "humidity_3",
+        "unit": "%",
+        "sample_gap": 15
+    },
+    "4": {
+        "id": 4,
+        "type": "soil_humidity",
+        "name": "humidity_4",
+        "unit": "%",
+        "sample_gap": 15
+    },
+    "5": {
+        "id": 5,
+        "type": "temperature",
+        "name": "ambient_temperature",
+        "unit": "°f",
+        "sample_gap": 15
+    },
+    "6": {
+        "id": 6,
+        "type": "humiditiy",
+        "name": "ambient_humidity",
+        "unit": "%",
+        "sample_gap": 15
+    },
+    "7": {
+        "id": 1,
+        "type": "light",
+        "name": "ambient_light",
+        "unit": "",
+        "sample_gap": 15
+    }
+}
