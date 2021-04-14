@@ -1,111 +1,189 @@
+"""Monitor that runs on the pi to collect sensor data and run pumps."""
+import json
+import logging
 import sys
 import time
-import json
-import datetime
-from utils.common import get_broker_ip, print_connection
+from datetime import datetime as dt
 
+import board
 import paho.mqtt.client as mqtt
-from ADC_Library import ADS7830
 from gpiozero import GPIODevice
+
+from utils.adc_library import ADS7830
+from utils.common import connection_message, get_broker_ip, parse_json_payload
+from utils.sensors import (ambient_humidity, ambient_temperature, dht_22,
+                           light, soil_humidity)
 
 # Create the MQTT client
 client = mqtt.Client("garden_monitor")
 
-# Config to hold sensor config data
-config = []
+# IP for the MQTT broker
+broker_ip = ""
 
+# Config to hold sensor config data
+sensor_config = {}
+
+# Sensor dictionary with sensor values that can be sampled
+sensors = {}
+
+# Make an object to interact with the analog-to-digital converter
 adc = ADS7830()
-# soil sensors channel: 0, 1, 2, 3
-# light sensor channel: 4
-# result = ambientSensor.read
-# temp = result.temperature
-# humidity = result.humidity
+
+# Object used to control access to the dht-22 sensor
+dht_22 = dht_22(board.D17)
+
+# create the default logger
+sample_logger = logging.getLogger("\u001b[32msample_log")
+mqtt_logger = logging.getLogger("\u001b[35mmqtt_log")
+config_logger = logging.getLogger("\u001b[34mconfig_log")
+
+logging.basicConfig(
+    level="INFO", format="\u001b[36m%(asctime)s \u001b[0m%(name)s \u001b[33m%(levelname)s \u001b[0m%(message)s")
+
+# Register pumps on GPIO pins
 pump1 = GPIODevice("GPIO26")
 pump2 = GPIODevice("GPIO19")
 pump3 = GPIODevice("GPIO13")
 pump4 = GPIODevice("GPIO5")
 
+# Map pump ids to their pump objects
 pump_mapping = {
-    "pump1": pump1,
-    "pump2": pump2,
-    "pump3": pump3,
-    "pump4": pump4
+    "1": pump1,
+    "2": pump2,
+    "3": pump3,
+    "4": pump4
 }
-
-sensors = {}  # TODO: Hard code default values
-# ids 0, 1, 2, 3 will be soil sensors. id=4 will be light,
-# id=5 will be temperature from DHT, id=6 will be ambient humidity from DHT
 
 
 def read_config():
-    """Read the config JSON that contains known info about the sensors connected."""
+    """Read the config JSON that contains known info about the sensors connected.
+
+    This data needs to be reconciled with known data from sensors/info before building.
+    """
     with open("sensor_config.json", "r") as config_file:
         config = json.loads(config_file.read())
+    config_logger.info(f"Loaded config: {json.dumps(config, indent=4)}")
     return config
+
+
+def build_sensors():
+    """Build sensor objects from the configuration stored in sensors."""
+    config_logger.info(
+        f"Reconciled config: {json.dumps(sensor_config, indent=4)}")
+    for id, sensor in sensor_config.items():
+        if (sensor["type"] == "soil_humidity"):
+            new_sensor = soil_humidity(
+                id, adc, sensor["adc_index"], unit=sensor["unit"],
+                sample_gap=sensor["sample_gap"], dry_value=sensor["dry_value"],
+                wet_value=sensor["wet_value"]
+            )
+            sensors.update({new_sensor.id: new_sensor})
+
+        if (sensor["type"] == "ambient_humidity"):
+            new_sensor = ambient_humidity(
+                id, dht_22, unit=sensor["unit"], sample_gap=sensor["sample_gap"]
+            )
+            sensors.update({new_sensor.id: new_sensor})
+
+        if (sensor["type"] == "ambient_temperature"):
+            new_sensor = ambient_temperature(
+                id, dht_22, unit=sensor["unit"], sample_gap=sensor["sample_gap"]
+            )
+            sensors.update({new_sensor.id: new_sensor})
+
+        if (sensor["type"] == "light"):
+            new_sensor = light(
+                id, adc, sensor["adc_index"], unit=sensor["unit"],
+                sample_gap=sensor["sample_gap"], dark_value=sensor["dark_value"],
+                light_value=sensor["light_value"]
+            )
+            sensors.update({new_sensor.id: new_sensor})
+        config_logger.info(
+            f"Created {sensor['type']} sensor with id: {sensor['id']}")
+
+
+def sample_routine():
+    """Run the main routines of the program.
+
+    Collects data from the sensors if their sample_gap has elapsed since the last collection
+    event. Then checks for MQTT messages.
+    """
+    for id, sensor in sensors.items():
+        if (dt.now() - sensor.last_sample).total_seconds() > (sensor.sample_gap):
+            value = sensor.sample()
+            timestamp = dt.now()
+            payload = {
+                "value": value,
+                "timestamp": timestamp.isoformat()
+            }
+            client.publish(
+                f"sensors/data/{id}", payload=json.dumps(payload), qos=2)
+            sample_logger.info(
+                f"Published {value}{sensor.unit} for sensor_id {id}")
 
 
 def on_connect(client, obj, flags, rc):
     """Print a message when connected to the MQTT broker."""
-    print_connection()
+    mqtt_logger.info(connection_message(broker_ip, rc))
 
 
 def handle_pumps_control(client, userdata, msg):
-    # will be subscribed to pumps/control, which will have an {id} at the end.
-    chunk = msg.topic.split("/")  # chunk[2] is id, chunk[3] is time
-    curr = pump_mapping[chunk[2]]
-    curr.value = 1
-    time.sleep(int(chunk[3]))
-    curr.value = 0
+    """Activate a specified pump when a message is received on pumps/control/{id}."""
+    data = parse_json_payload(msg)
+    mqtt_logger.info(
+        f"Pump instruction received: {json.dumps(data, indent=4)}")
+
+    pump_id = msg.topic.split("/")[-1]
+    pump = pump_mapping[pump_id]
+    # pump.value = 1
+    time.sleep(data["duration"])
+    # pump.value = 0
 
 
 def handle_sensor_info(client, userdata, msg):
+    """Reconcile known sensor info from garden_manager with local config."""
     global sensors
-    sensor_info = json.loads(msg)
+    known_sensors = parse_json_payload(msg)
+    mqtt_logger.info(
+        f"Received config from sensors/info: {json.dumps(known_sensors, indent=2)}")
+
     # For sensors that are passed, we change our local config
-    knownids = []
-    for sensor in sensor_info:
-        if sensor["id"] in dict.keys(sensors):
-            sensors[sensor["id"]] = {
+    for known_sensor in known_sensors:
+        # Check for sensor_id matches in the known config vs local
+        if str(known_sensor["id"]) in sensor_config.keys():
+            sensor_config[str(known_sensor["id"])].update(
+                {
+                    "type": known_sensor["type"],
+                    "name": known_sensor["name"],
+                    "unit": known_sensor["unit"],
+                    "sample_gap": known_sensor["sample_gap"]
+                }
+            )
+    # For sensors that sensors/info didn't know about, we send a default config to sensors/config
+    known_ids = [str(sensor["id"]) for sensor in known_sensors]
+    for id, sensor in sensor_config.items():
+        if id not in known_ids:
+            payload = {
+                "id": id,
                 "type": sensor["type"],
                 "name": sensor["name"],
                 "unit": sensor["unit"],
-                "sample_rate_hz": sensor["sample_rate_hz"]
+                "sample_gap": sensor["sample_gap"]
             }
-            knownids.append("id")
-    # For sensors that sensor info didn't know about, we pass them through sensors/config/id
-    # monitor - knownids = unknown to manager
-    for index, sensor in dict.items(sensors):
-        if index not in knownids:
-            client.publish(f"sensors/config/{index}",
-                           payload=json.dumps({"id": index,
-                                              "type": sensor["type"],
-                                               "name": sensor["name"],
-                                               "unit": sensor["unit"],
-                                               "sample_rate_hz": sensor["sample_rate_hz"]}), qos=2, retain=False)
+            mqtt_logger.info(
+                f"Publishing new sensor config for sensor_id {id}")
+            client.publish("sensors/config",
+                           payload=json.dumps(payload), qos=2, retain=False)
 
-
-def sample(sensor):
-    print("wip")
-    for sensor in sensors:
-        print(f"{sensor.id}: {sensor.sample()} {sensor.unit}")
-
-
-def sample_routine():  # TODO: code the sample routine
-    # guaranteed to have received the retained sensors info if it exists, don't have to
-    # poll again until the end of the loop.
-    last_sampled = {sensor_id: datetime.datetime.now()
-                    for sensor_id in sensors.keys()}
-    while(1):
-        for id, sample_timestamp in last_sampled.items:
-            if (datetime.datetime.now() - sample_timestamp).total_seconds() > (sensors[id]["samples"]):
-                sample(sensors[id])
-                last_sampled[id] = datetime.datetime.now()
+    # Once config has been reconciled, build sensors.
+    build_sensors()
 
 
 def publish_status():
     """Publish the status of garden_monitor."""
     client.publish("status/garden_monitor",
                    payload="online", qos=2, retain=True)
+    mqtt_logger.info("Status published")
 
 
 """
@@ -118,12 +196,7 @@ included.
 """
 if __name__ == '__main__':
     # Check for correct execution of program
-    get_broker_ip(__file__)
-
-    # Load known values in.
-    config = read_config()
-
-    print(config)
+    broker_ip = get_broker_ip(__file__)
 
     # Set garden_monitor's last will message for when it is offline.
     client.will_set("status/garden_monitor",
@@ -134,16 +207,24 @@ if __name__ == '__main__':
     client.message_callback_add("pumps/control/#", handle_pumps_control)
     client.message_callback_add("sensors/info", handle_sensor_info)
 
+    # Connect to the MQTT broker
+    client.connect(sys.argv[1], 1883)
+
     # Subscribe to applicable topics
     client.subscribe([
         ("sensors/info", 2),
         ("pumps/control/+", 2)
     ])
 
-    # Connect to the MQTT broker
-    client.connect(sys.argv[1], 1883)
+    # Send online message
+    publish_status()
 
-    # store retained messages from config - check
-    # use that config to sample
-    # after sampling, send to sensors/data/{id}
-    # look for new config on sensors/info and manual pumps on pumps/control
+    # Load basic values in.
+    sensor_config = read_config()
+
+    build_sensors()
+
+    # Start the main routine
+    while(True):
+        sample_routine()
+        client.loop()

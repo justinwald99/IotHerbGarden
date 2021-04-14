@@ -13,6 +13,7 @@ class generic_sensor():
         self.id = id
         self.unit = unit
         self.sample_gap = sample_gap
+        self.last_sample = dt(1, 1, 1)
 
     def sample(self):
         """Return a sample of data."""
@@ -22,7 +23,7 @@ class generic_sensor():
 class soil_humidity(generic_sensor):
     """A single capacitive soil humidity sensor hooked to an ADC."""
 
-    def __init__(self, id, adc, adc_index, unit="", sample_gap=60, dry_value=143, wet_value=80):
+    def __init__(self, id, adc, adc_index, unit="", sample_gap=60, wet_value=0, dry_value=255):
         """Concrete soil humidity sensor.
 
         Capacitive soil humidity sensor that emits an anologue reading.
@@ -70,16 +71,18 @@ class soil_humidity(generic_sensor):
         """
         raw_reading = self.adc.analogRead(self.adc_index)
         self.last_sample = dt.now()
-        result = round(1 - (raw_reading - self.wet_value) / (self.dry_value - self.wet_value), 2)
-        result = min(result, 1)
+        result = (1 - (raw_reading - self.wet_value) /
+                  (self.dry_value - self.wet_value)) * 100
+        result = min(result, 100)
         result = max(result, 0)
+        result = round(result, 2)
         return result
 
 
 class light(generic_sensor):
     """A photoresistor light sensor."""
 
-    def __init__(self, id, adc, adc_index, unit="", sample_gap=60, dark_value=20, light_value=255):
+    def __init__(self, id, adc, adc_index, unit="", sample_gap=60, dark_value=0, light_value=255):
         """Create a new photoresistor light sensor.
 
         The photoresistor emits an anolog signal that's read by the adc.
@@ -124,9 +127,11 @@ class light(generic_sensor):
         """
         raw_reading = self.adc.analogRead(self.adc_index)
         self.last_sample = dt.now()
-        result = round((raw_reading - self.dark_value) / (self.light_value - self.dark_value), 2)
-        result = min(result, 1)
+        result = (raw_reading - self.dark_value) / \
+            (self.light_value - self.dark_value) * 100
+        result = min(result, 100)
         result = max(result, 0)
+        result = round(result, 2)
         return result
 
 
@@ -142,14 +147,16 @@ class dht_22():
             The GPIO pin that the DHT-22's data wire is connected to.
         """
         self.dhtDevice = adafruit_dht.DHT22(pin, use_pulseio=False)
-        self.last_sampled = False
+        self.temperature_f = 0
+        self.humidity = 0
+        self._update_values()
 
     def get_humidity(self):
         """Return the current relative humidity.
 
         Returns the most recent humidity value or querries the sensor again if more than 2 seconds have passed
         """
-        if (not self.last_sampled or (dt.now() - self.last_sampled).total_seconds() > 2.5):
+        if ((dt.now() - self.last_sample).total_seconds() > 2.5):
             self._update_values()
 
         return round(self.humidity, 1)
@@ -159,17 +166,17 @@ class dht_22():
 
         Returns the most recent temperature value or querries the sensor again if more than 2 seconds have passed
         """
-        if (not self.last_sampled or (dt.now() - self.last_sampled).total_seconds() > 2.5):
+        if (not self.last_sample or (dt.now() - self.last_sample).total_seconds() > 2.5):
             self._update_values()
         return round(self.temperature_f, 1)
 
     def _update_values(self):
         """Private method to retrieve values then put them in cache to rate-limit querries."""
         try:
+            self.last_sample = dt.now()
             temperature_c = self.dhtDevice.temperature
             self.temperature_f = temperature_c * (9 / 5) + 32
             self.humidity = self.dhtDevice.humidity
-            self.last_sampled = dt.now()
 
         except RuntimeError as error:
             # Errors happen fairly often, DHT's are hard to read, just keep going
@@ -214,6 +221,7 @@ class ambient_temperature(generic_sensor):
         -------
         Temperature in fahrenheit
         """
+        self.last_sample = dt.now()
         return self.dht_22.get_temperature_f()
 
 
@@ -250,4 +258,5 @@ class ambient_humidity(generic_sensor):
         -------
         Relative humidity percentage.
         """
+        self.last_sample = dt.now()
         return self.dht_22.get_humidity()

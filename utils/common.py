@@ -28,9 +28,9 @@ def get_broker_ip(script_name):
     return re.match(r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$", sys.argv[1]).group()
 
 
-def print_connection(broker_ip, rc):
+def connection_message(broker_ip, rc):
     """Let the client know that a connection has been made."""
-    print(f"Connected to {broker_ip} with return code {rc}")
+    return f"Connected to {broker_ip} with return code {rc}"
 
 
 def parse_json_payload(msg):

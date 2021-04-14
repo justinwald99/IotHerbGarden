@@ -6,15 +6,16 @@ well as the automation of watering events.
 """
 import json
 from datetime import datetime as dt
+import logging
 
 import paho.mqtt.client as mqtt
 from sqlalchemy import MetaData, create_engine, select
 
-from utils.common import get_broker_ip, parse_json_payload, print_connection
+from utils.common import get_broker_ip, parse_json_payload, connection_message
 from utils.db_interaction import create_db, create_sensor, create_sample, create_plant, create_watering_event
 
 # DB objects
-engine = create_engine("sqlite+pysqlite:///garden.db", echo=True, future=True)
+engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
 metadata = MetaData()
 
 # IP for the MQTT broker
@@ -23,15 +24,24 @@ broker_ip = ""
 # Create an MQTT client object
 client = mqtt.Client("garden_manager")
 
+# Logging setup
+sample_logger = logging.getLogger("\u001b[32msample_log")
+mqtt_logger = logging.getLogger("\u001b[35mmqtt_log")
+config_logger = logging.getLogger("\u001b[34mconfig_log")
+
+logging.basicConfig(
+    level="INFO", format="\u001b[36m%(asctime)s \u001b[0m%(name)s \u001b[33m%(levelname)s \u001b[0m%(message)s")
+
 
 def on_connect(client, userdata, flags, rc):
     """Print when the MQTT broker accepts the connection."""
-    print_connection(broker_ip, rc)
+    mqtt_logger.info(connection_message(broker_ip, rc))
 
 
 def handle_pumps_control(client, userdata, msg):
     """Log a watering event in the database."""
     payload = parse_json_payload(msg)
+    mqtt_logger.info(f"Received pump event for pump_id {msg.topic.split('/')[-1]}: {json.dumps(payload, indent=4)}")
 
     plant_table = metadata.tables["plant"]
     with engine.connect() as conn:
@@ -53,12 +63,15 @@ def handle_pumps_control(client, userdata, msg):
 def handle_plants_config(client, userdata, msg):
     """Update the DB to save plant configs."""
     payload = parse_json_payload(msg)
+    mqtt_logger.info(f"Received plant config: {json.dumps(payload, indent=4)}")
     create_plant(engine, metadata, payload)
 
 
 def handle_sensors_config(client, userdata, msg):
     """Update the DB with a new sensor config, then broadcast a new 'sensors/info'."""
     payload = parse_json_payload(msg)
+    mqtt_logger.info(
+        f"Received sensor config: {json.dumps(payload, indent=4)}")
     payload.update(
         {
             "id": int(payload["id"]),
@@ -72,6 +85,8 @@ def handle_sensors_config(client, userdata, msg):
 def handle_sensors_data(client, userdata, msg):
     """Log received data into the DB as a new data sample."""
     payload = parse_json_payload(msg)
+    sample_logger.info(
+        f"Received {payload['value']} from sensor_id {msg.topic.split('/')[-1]}")
 
     payload.update(
         {
@@ -85,7 +100,9 @@ def handle_sensors_data(client, userdata, msg):
 
 def publish_status():
     """Publish the status of garden_manager."""
-    client.publish("status/garden_manager", payload="online", qos=2, retain=True)
+    client.publish("status/garden_manager",
+                   payload="online", qos=2, retain=True)
+    mqtt_logger.info("Published status")
 
 
 def publish_sensor_info():
@@ -101,7 +118,9 @@ def publish_sensor_info():
                 "unit": row[3],
                 "sample_gap": row[4]
             })
-    client.publish("sensors/info", payload=json.dumps(info), qos=2, retain=True)
+    client.publish("sensors/info", payload=json.dumps(info),
+                   qos=2, retain=True)
+    mqtt_logger.info(f"Published sensors/info: {json.dumps(info, indent=4)}")
 
 
 if (__name__ == "__main__"):
@@ -119,7 +138,8 @@ if (__name__ == "__main__"):
     client.on_connect = on_connect
 
     # Create the last will for garden_manager
-    client.will_set("status/garden_manager", payload="offline", qos=2, retain=True)
+    client.will_set("status/garden_manager",
+                    payload="offline", qos=2, retain=True)
 
     # Create connection to MQTT broker
     client.connect(broker_ip, keepalive=5)
@@ -133,5 +153,7 @@ if (__name__ == "__main__"):
     ])
 
     publish_status()
+
+    publish_sensor_info()
 
     client.loop_forever()
