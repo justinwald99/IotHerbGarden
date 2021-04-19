@@ -54,7 +54,7 @@
         "sample_gap": 15
     },
     "7": {
-        "id": 1,
+        "id": 7,
         "type": "light",
         "name": "ambient_light",
         "unit": "%",

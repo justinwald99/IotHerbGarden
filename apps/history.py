@@ -1,8 +1,15 @@
-import dash_html_components as html
 import dash_core_components as dcc
+from dash.dependencies import Input, Output
+import dash_html_components as html
+from app import app
 from utils.ui_elements import history_graph
 
 layout = [
+    dcc.Interval(
+        id='interval-component',
+        interval=3*1000,  # in milliseconds
+        n_intervals=0
+    ),
     html.H1("History"),
     html.Div(
         [
@@ -87,9 +94,16 @@ layout = [
     html.Div(
         [
             dcc.Graph(
-                figure=history_graph()
+                id="history_graph"
             )
         ],
         className="card my-2 p-2"
     )
 ]
+
+
+@app.callback(Output('history_graph', 'figure'),
+              Input('interval-component', 'n_intervals'))
+def update_graph_data(n):
+    """Pull new data from the database to update the graph."""
+    return history_graph()

@@ -23,7 +23,7 @@ app.layout = html.Div([
     navbar,
     dcc.Location(id='url', refresh=False),
     html.Div(id='page-content', className="container")
-    ]
+]
 )
 
 
@@ -44,12 +44,13 @@ def display_page(pathname):
             [
                 html.H1("404: Not found", className="text-danger"),
                 html.Hr(),
-                html.P(f"The pathname {pathname} was not recognised..."),
+                html.P(f"The pathname {pathname} was not recognized..."),
             ]
         )
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        raise ValueError("Please execute the program: python3 index.py <MQTT_IP>")
-    app.run_server(debug=True)
+        raise ValueError(
+            "Please execute the program: python3 index.py <MQTT_IP>")
+    app.run_server(debug=True, port=8050, host="0.0.0.0")
