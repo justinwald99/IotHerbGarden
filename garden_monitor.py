@@ -6,6 +6,7 @@ import time
 from datetime import datetime as dt
 
 import board
+from gpiozero.output_devices import OutputDevice
 import paho.mqtt.client as mqtt
 from gpiozero import GPIODevice
 
@@ -41,10 +42,10 @@ logging.basicConfig(
     level="INFO", format="\u001b[36m%(asctime)s \u001b[0m%(name)s \u001b[33m%(levelname)s \u001b[0m%(message)s")
 
 # Register pumps on GPIO pins
-pump1 = GPIODevice("GPIO26")
-pump2 = GPIODevice("GPIO19")
-pump3 = GPIODevice("GPIO13")
-pump4 = GPIODevice("GPIO5")
+pump1 = OutputDevice("GPIO26", active_high=False)
+pump2 = OutputDevice("GPIO19", active_high=False)
+pump3 = OutputDevice("GPIO13", active_high=False)
+pump4 = OutputDevice("GPIO6", active_high=False)
 
 # Map pump ids to their pump objects
 pump_mapping = {
@@ -135,9 +136,11 @@ def handle_pumps_control(client, userdata, msg):
 
     pump_id = msg.topic.split("/")[-1]
     pump = pump_mapping[pump_id]
-    # pump.value = 1
-    time.sleep(data["duration"])
-    # pump.value = 0
+    start_time = dt.now()
+    pump.on()
+    while ((dt.now() - start_time).total_seconds() < data["duration"]):
+        pass
+    pump.off()
 
 
 def handle_sensor_info(client, userdata, msg):

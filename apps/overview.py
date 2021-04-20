@@ -45,16 +45,16 @@ import pandas as pd
 def update_page(n_intervals):
     engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
     metadata = MetaData()
+    sample_table = Table("sample", metadata, autoload_with=engine)
+    sensor_table = Table("sensor", metadata, autoload_with=engine)
+    plant_table = Table("plant", metadata, autoload_with=engine)
     error = 0
     humidity_result, temp_result, light_result, plant_graph_result, plant_misc = (None, None, None, None, None)
     with engine.connect() as conn:
         try:
-            sample_table = Table("sample", metadata, autoload_with=engine)
-            sensor_table = Table("sensor", metadata, autoload_with=engine)
-            plant_table = Table("plant", metadata, autoload_with=engine)
             # get current ambient humidity
             humidity_result = conn.execute(
-                select([sample_table.c.value]).where(sample_table.c.sensor_id == sensor_table.c.id, sensor_table.c.type == 'ambient_humidity').limit(1).order_by(desc(sample_table.c.timestamp))
+                select([sample_table.c.value]).select_from(sample_table).where(sample_table.c.sensor_id == sensor_table.c.id, sensor_table.c.type == 'ambient_humidity').limit(1).order_by(desc(sample_table.c.timestamp))
             ).fetchall()
             # get current temperature
             temp_result = conn.execute(
@@ -66,20 +66,21 @@ def update_page(n_intervals):
             ).fetchall()
             # get plant humidity graphs
             plant_graph_result = conn.execute(
-                select([sample_table.c.value, sample_table.c.timestamp, plant_table.c.name]).join(plant_table).where(sample_table.c.sensor_id == plant_table.c.humidity_sensor_id).limit(100).group_by(plant_table.c.name).order_by(desc(sample_table.c.timestamp))
-            ) # do I even need the join plant table? What sort of structure does this return? Looks like it returns a tuple of length 3.. hopefully grouped by plant.
+                select([sample_table.c.value, sample_table.c.timestamp, plant_table.c.id]).where(sample_table.c.sensor_id == plant_table.c.humidity_sensor_id).limit(100).group_by(plant_table.c.id).order_by(desc(sample_table.c.timestamp))
+            ).fetchall() # do I even need the join plant table? What sort of structure does this return? Looks like it returns a tuple of length 3.. hopefully grouped by plant.
             # we should be able to just get the plant_humidity and plant_last_watered from this plant_graph_result.
             plant_misc = conn.execute(
                 select([plant_table.c.name, plant_table.c.target])
-            ) # we should get 4 tuples back of name, target
+            ).fetchall() # we should get 4 tuples back of name, target
                 # get plant names
                 # get plant_humidity_target
+            print(plant_misc)
 
-        except:
-            print("Error occurred collecting DB data, passing test values")
+        except Exception as e:
+            print(e)
             error = 1
     if error == 1 or None in [humidity_result, temp_result, light_result, plant_graph_result, plant_misc]: # pass test values if there was an error
-        
+        print("Error occurred collecting DB data, passing test values")
         return [make_gauge("Temperature", 50, "° F", [0, 100], "#dc3545"), make_gauge("Relative Humidity", 50, "%", [0, 100], "#17a2b8"),
          px.line(pd.DataFrame({'timestamp':[1,2,3,4],'sunlight':[2,3,4,5]}), x='timestamp', y='sunlight', title='Test Input', width=525, height=250),
          px.line(pd.DataFrame({'timestamp':[1,2,3,4], 'humidity':[2,3,4,5]}), x='timestamp', y='humidity', width=450, height=300),

@@ -1,7 +1,7 @@
 {
-    "id": 7,
-    "type": "light",
-    "name": "Light Sensor",
+    "id": 3,
+    "type": "soil_humidity",
+    "name": "humidity_3",
     "unit": "%",
-    "sample_gap": 3
+    "sample_gap": 1
 }
