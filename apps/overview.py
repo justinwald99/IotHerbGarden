@@ -46,7 +46,6 @@ def update_page(n_intervals):
     engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
     metadata = MetaData()
     error = 0
-    update = 0
     humidity_result, temp_result, light_result, plant_graph_result, plant_misc = (None, None, None, None, None)
     with engine.connect() as conn:
         try:
