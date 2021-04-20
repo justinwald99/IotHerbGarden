@@ -31,7 +31,7 @@ def make_gauge(title, value, suffix, range, color):
             }
         ),
         layout={
-            "height": 100,
+            "height": 150,
             "margin": {
                 "l": 5,
                 "r": 5,
