@@ -2,12 +2,60 @@ import dash_html_components as html
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
+from dash import callback_context, no_update
 import paho.mqtt.publish as publish
 import json
 from app import app
+import sys
 
-plants = ['PlantId1', 'PlantId2', 'PlantId3', 'PlantId4']
-sensors = ['Sensor1', 'Sensor2', 'Sensor3', 'Sensor4']
+from sqlalchemy import MetaData, create_engine, select, Table
+
+# DB objects
+engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
+metadata = MetaData()
+plantTable = Table("plant", metadata, autoload_with=engine)
+sensorTable = Table("sensor", metadata, autoload_with=engine)
+with engine.connect() as conn:
+        plantsData = conn.execute(select(
+            plantTable.c.id,
+            plantTable.c.name,
+            plantTable.c.humidity_sensor_id,
+            plantTable.c.pump_id,
+            plantTable.c.target,
+            plantTable.c.watering_cooldown,
+            plantTable.c.watering_duration,
+            plantTable.c.humidity_tolerance
+        )).fetchall()
+        sensorsData = conn.execute(select(
+            sensorTable.c.id,
+            sensorTable.c.type,
+            sensorTable.c.name,
+            sensorTable.c.unit,
+            sensorTable.c.sample_gap
+        )).fetchall()
+
+def getDBData():
+    with engine.connect() as conn:
+        plantsData = conn.execute(select(
+            plantTable.c.id,
+            plantTable.c.name,
+            plantTable.c.humidity_sensor_id,
+            plantTable.c.pump_id,
+            plantTable.c.target,
+            plantTable.c.watering_cooldown,
+            plantTable.c.watering_duration,
+            plantTable.c.humidity_tolerance
+        )).fetchall()
+        sensorsData = conn.execute(select(
+            sensorTable.c.id,
+            sensorTable.c.type,
+            sensorTable.c.name,
+            sensorTable.c.unit,
+            sensorTable.c.sample_gap
+        )).fetchall()
+
+#plants = ['PlantId1', 'PlantId2', 'PlantId3', 'PlantId4']
+#sensors = ['Sensor1', 'Sensor2', 'Sensor3', 'Sensor4']
 pumps = ['Pump1', 'Pump2', 'Pump3', 'Pump4']
 rates = ['second', 'minute', 'hour']
 
@@ -17,10 +65,8 @@ rate_mapping = {
     'hour': 3600
 }
 
-# def get_mqtt_data() TODO: Auto-populate fields using MQTT
-
-def get_plant_payload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
-    return json.dumps({ "name":name, "sensor":humiditySensor, "pump":pump, "target":targetHumidity,
+def get_plant_payload(id, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
+    return json.dumps({"id":id, "name":name, "sensor":humiditySensor, "pump":pump, "target":targetHumidity,
      "watering_cooldown":wateringCooldown, "watering_duration":wateringDuration, "humidity_tolerance":humidityTolerance})
 
 
@@ -31,9 +77,9 @@ layout = [
             html.Div(
                 [
                     dbc.Select(
-                        id='plantDropdown',
-                        options=[{'label': plantId, 'value': plantId}
-                                 for plantId in plants]
+                        id='selectedPlant',
+                        options=[{'label': plant[1], 'value': list(plant)}
+                                 for plant in plantsData]
                     )
                 ],
                 className="col-md-3 m-4"
@@ -45,13 +91,13 @@ layout = [
                         [
                             dbc.InputGroup([
                                 html.H5("Name", className="col-md-3"),
-                                dcc.Input(id="name", type="text", placeholder="getFromDB", className="col-md-3")
+                                dcc.Input(id="name", type="text", className="col-md-3")
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Humidity Sensor", className="col-md-3"),
                                 dbc.Select(
                                     id='humiditySensor',
-                                    options=[{'label': sensor, 'value': sensor} for sensor in sensors],
+                                    options=[{'label': sensor[2], 'value': sensor[0]} for sensor in sensorsData],
                                     className="col-md-3"
                                 )
                             ], className="py-2"),
@@ -65,26 +111,23 @@ layout = [
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Target Humidity", className="col-md-3"),
-                                dcc.Input(id="targetHumidity", type="number", placeholder=0, min=0, max=100,
+                                dcc.Input(id="targetHumidity", type="number", min=0, max=100,
                                           className="col-md-3"),
                                 html.H5("%", className="px-2")
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Watering Cooldown", className="col-md-3"),
-                                dcc.Input(id="wateringCooldown", type="number",
-                                          placeholder=0, min=0, className="col-md-3"),
+                                dcc.Input(id="wateringCooldown", type="number", min=0, className="col-md-3"),
                                 html.H5("Seconds", className="px-2")
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Watering Duration", className="col-md-3"),
-                                dcc.Input(id="wateringDuration", type="number",
-                                          placeholder=0, min=0, className="col-md-3"),
+                                dcc.Input(id="wateringDuration", type="number", min=0, className="col-md-3"),
                                 html.H5("Seconds", className="px-2")
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Humidity Tolerance", className="col-md-3"),
-                                dcc.Input(id="humidityTolerance", type="number",
-                                          placeholder=0, min=0, max=100, className="col-md-3"),
+                                dcc.Input(id="humidityTolerance", type="number", min=0, max=100, className="col-md-3"),
                                 html.H5("+/- %", className="px-2")
                             ], className="py-2"),
                             html.Span([
@@ -101,8 +144,8 @@ layout = [
             html.Div(
                 [
                     dbc.Select(
-                        id='sensorDropdown',
-                        options=[{'label': sensorId, 'value': sensorId} for sensorId in sensors]
+                        id='selectedSensor',
+                        options=[{'label': sensor[2], 'value': list(sensor)} for sensor in sensorsData]
                     )
                 ], className="col-md-3 m-4"),
             html.Div(
@@ -112,21 +155,11 @@ layout = [
                         [
                             dbc.InputGroup([
                                 html.H5("Name", className="col-md-3"),
-                                dcc.Input(id="sensor_label", type="text",
-                                          placeholder="getFromDB", className="col-md-3")
-                            ], className="py-2"),
-                            dbc.InputGroup([
-                                html.H5("sensor_id", className="col-md-3"),
-                                dbc.Select(
-                                    id='sensor_id',
-                                    options=[{'label': sensor, 'value': sensor} for sensor in sensors],
-                                    className="col-md-3"
-                                )
+                                dcc.Input(id="sensor_label", type="text", className="col-md-3")
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Samples", className="col-md-3"),
-                                dcc.Input(id="samples", type="number",
-                                          placeholder=0, min=0, className="col-md-3"),
+                                dcc.Input(id="samples", type="number", min=0, className="col-md-3"),
                                 html.H5("per", className="px-2"),
                                 dbc.Select(
                                     id='rate',
@@ -146,9 +179,8 @@ layout = [
     ])
 ]
 
-
 @app.callback(
-    Output('plantDropdown', 'value'),
+    Output('selectedPlant', 'value'),
     Output('name', 'value'),
     Output('humiditySensor', 'value'),
     Output('pump', 'value'),
@@ -157,16 +189,24 @@ layout = [
     Output('wateringDuration', 'value'),
     Output('humidityTolerance', 'value'),
     Output('save_plants', 'n_clicks'),
+    Input('selectedPlant','value'),
     Input('cancel_plants', 'n_clicks')
 )
-def cancelPlants(n_clicks):
-    return None, '', None, None, 0, 0, 0, 0, 0
+def handlePlants(selectedPlant, n_clicks):
+    ctx = callback_context
+    caller = ctx.triggered[0]['prop_id'].split('.')[0]
+    if caller == 'selectedPlant':
+        if selectedPlant is not None:
+            selectedPlant = selectedPlant.split(",")
+            return no_update, selectedPlant[1], selectedPlant[2], selectedPlant[3], selectedPlant[4], selectedPlant[5], selectedPlant[6], selectedPlant[7], 0
+    else:
+        return None, '', None, None, 0, 0, 0, 0, 0
 
 
 @app.callback(
     Output('plants_out', 'children'),
     Input('save_plants', 'n_clicks'),
-    State('plantDropdown', 'value'), # save plant id
+    State('selectedPlant', 'value'), # save plant id
     State('name', 'value'), # save plant name
     State('humiditySensor', 'value'), # save humidity sensor
     State('pump', 'value'), # save pump
@@ -175,7 +215,7 @@ def cancelPlants(n_clicks):
     State('wateringDuration', 'value'), # save watering duration
     State('humidityTolerance', 'value') # save humidity tolerance
 )
-def savePlants(n_clicks, plantDropdown, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
+def savePlants(n_clicks, selectedPlant, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
     invalidReturnString = ""
     if (n_clicks > 0):
         if targetHumidity < 0 or targetHumidity > 100:
@@ -187,46 +227,54 @@ def savePlants(n_clicks, plantDropdown, name, humiditySensor, pump, targetHumidi
         if humidityTolerance > 50 or humidityTolerance < 0:
             invalidReturnString += "Invalid Humidity Tolerance [0,50]\n"
         if invalidReturnString == "":
-            publish.single(f"plants/config/{plantDropdown}", payload=get_plant_payload(name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
-                qos=2, retain=True, hostname="192.168.1.182", ## TODO: Change hostname to be accurate
-                port=1883) ## TODO: note that the plantDropdown values probably don't store what we want it to
+            selectedPlant = selectedPlant.split(",")
+            publish.single(f"plants/config", payload=get_plant_payload(selectedPlant[0], name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
+                qos=2, retain=True, hostname=sys.argv[1], ## TODO: Change hostname to be accurate
+                port=1883)
+            getDBData()
             return html.H5("Plants saved", id="plants_out_text")
         else:
             return html.H5(invalidReturnString, id="plants_out_text")
     return None
 
-
 @app.callback(
-    Output('sensorDropdown', 'value'),
+    Output('selectedSensor', 'value'),
     Output('sensor_label', 'value'),
-    Output('sensor_id', 'value'),
     Output('samples', 'value'),
     Output('rate', 'value'),
     Output('save_sensors', 'n_clicks'),
+    Input('selectedSensor', 'value'),
     Input('cancel_sensors', 'n_clicks')
 )
-def cancelSensors(n_clicks):
-    return None, '', None,  0, None, 0
+def handleSensors(selectedSensor, n_clicks):
+    ctx = callback_context
+    caller = ctx.triggered[0]['prop_id'].split('.')[0]
+    if caller == 'selectedSensor':
+        if selectedSensor is not None:
+            print(selectedSensor)
+            selectedSensor = selectedSensor.split(",")
+            return no_update, selectedSensor[2], selectedSensor[4], rates[0], 0
+    else:
+        return None, '',  0, None, 0
 
 
 @app.callback(
     Output('sensors_out', 'children'),
     Input('save_sensors', 'n_clicks'),
-    State('sensorDropdown', 'value'),
+    State('selectedSensor', 'value'),
     State('sensor_label', 'value'),
-    State('sensor_id', 'value'),
     State('samples', 'value'),
     State('rate', 'value')
 )
-def saveSensors(n_clicks, sensorDropdown, sensor_label, sensor_id, samples, rate):
+def saveSensors(n_clicks, selectedSensor, sensor_label, samples, rate):
     # TODO Autofill
     if (n_clicks > 0):
         if samples < 0:
             return html.H5("Invalid samples (>0)", id="sensors_out_text")
-        time_between_samples = samples / rate_mapping[rate]
-        publish.single(topic=f"sensors/config/{sensorDropdown}", payload=json.dumps({"name":sensor_id, "sample_rate":time_between_samples}),
-            qos=2, retain=True, hostname="192.168.1.182", port=1883)
-         ## TODO: sensorDropdown probably isn't what we want here, but they're all the same type so I'm unsure of what to put for {type}
-         ## also, what is the difference between sensor_label and sensor_id? I passed sensor_id to the payload, so change it if it's wrong :)
+        time_between_samples = int(samples / rate_mapping[rate])
+        selectedSensor = selectedSensor.split(",")
+        publish.single(topic=f"sensors/config", payload=json.dumps({"id":selectedSensor[0], "type":selectedSensor[1], "name":sensor_label, "unit":selectedSensor[3], "sample_gap":time_between_samples}),
+            qos=2, retain=True, hostname=sys.argv[1], port=1883)
+        getDBData()
         return html.H5("Sensors saved", id="sensors_out_text")
     return None
