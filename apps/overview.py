@@ -49,37 +49,41 @@ def update_page(n_intervals):
     sensor_table = Table("sensor", metadata, autoload_with=engine)
     plant_table = Table("plant", metadata, autoload_with=engine)
     error = 0
-    humidity_result, temp_result, light_result, plant_graph_result, plant_misc = (None, None, None, None, None)
+    humidity_result, temp_result, light_result, plant_graphs, plant_misc = (None, None, None, None, None)
     with engine.connect() as conn:
         try:
             # get current ambient humidity
             humidity_result = conn.execute(
                 select([sample_table.c.value]).select_from(sample_table).where(sample_table.c.sensor_id == sensor_table.c.id, sensor_table.c.type == 'ambient_humidity').limit(1).order_by(desc(sample_table.c.timestamp))
             ).fetchall()
+
             # get current temperature
             temp_result = conn.execute(
                 select([sample_table.c.value]).where(sample_table.c.sensor_id == sensor_table.c.id, sensor_table.c.type == 'ambient_temperature').limit(1).order_by(desc(sample_table.c.timestamp))
             ).fetchall()
             # get last 100 light entries
             light_result= conn.execute(
-                select([sample_table.c.value]).where(sample_table.c.sensor_id == sensor_table.c.id, sensor_table.c.type == 'light').limit(100).order_by(desc(sample_table.c.timestamp))
+                select([sample_table.c.timestamp, sample_table.c.value]).where(sample_table.c.sensor_id == sensor_table.c.id, sensor_table.c.type == 'light').limit(100).order_by(desc(sample_table.c.timestamp))
             ).fetchall()
             # get plant humidity graphs
-            plant_graph_result = conn.execute(
-                select([sample_table.c.value, sample_table.c.timestamp, plant_table.c.id]).where(sample_table.c.sensor_id == plant_table.c.humidity_sensor_id).limit(100).group_by(plant_table.c.id).order_by(desc(sample_table.c.timestamp))
-            ).fetchall() # do I even need the join plant table? What sort of structure does this return? Looks like it returns a tuple of length 3.. hopefully grouped by plant.
-            # we should be able to just get the plant_humidity and plant_last_watered from this plant_graph_result.
             plant_misc = conn.execute(
-                select([plant_table.c.name, plant_table.c.target])
-            ).fetchall() # we should get 4 tuples back of name, target
-                # get plant names
-                # get plant_humidity_target
-            print(plant_misc)
+                select([plant_table.c.name, plant_table.c.target, plant_table.c.id])
+            ).fetchall() # id is plant_misc[i][2]
+            plant_graphs = []
+            for plant in plant_misc:
+                plant_graph_result = conn.execute(
+                    select([sample_table.c.timestamp, sample_table.c.value]).where(plant_table.c.id == plant[2], sample_table.c.sensor_id == plant_table.c.humidity_sensor_id).limit(25).order_by(desc(sample_table.c.timestamp))
+                ).fetchall()
+                plant_graphs.append(plant_graph_result)
+            # plant_graphs is the list of all plant graphs.
+            # plantgraphs[i] is the graph for the i'th plant
+            # plantgraphs[i][j] is the j'th datapoint for the i'th plant
+            # plantgraphs[i][j][0] is the timestamp, plantgraphs[i][j][1] is the value
 
         except Exception as e:
             print(e)
             error = 1
-    if error == 1 or None in [humidity_result, temp_result, light_result, plant_graph_result, plant_misc]: # pass test values if there was an error
+    if error == 1 or None in [humidity_result, temp_result, light_result, plant_graphs, plant_misc]: # pass test values if there was an error
         print("Error occurred collecting DB data, passing test values")
         return [make_gauge("Temperature", 50, "° F", [0, 100], "#dc3545"), make_gauge("Relative Humidity", 50, "%", [0, 100], "#17a2b8"),
          px.line(pd.DataFrame({'timestamp':[1,2,3,4],'sunlight':[2,3,4,5]}), x='timestamp', y='sunlight', title='Test Input', width=525, height=250),
@@ -92,11 +96,11 @@ def update_page(n_intervals):
 
 
     sunlight_df = pd.DataFrame(light_result, columns=["timestamp","value"])
-    plant1_df = pd.DataFrame(plant_graph_result[0], columns=["timestamp", "value"])
-    plant2_df = pd.DataFrame(plant_graph_result[1], columns=["timestamp", "value"])
-    plant3_df = pd.DataFrame(plant_graph_result[2], columns=["timestamp", "value"])
-    plant4_df = pd.DataFrame(plant_graph_result[3], columns=["timestamp", "value"])
-    return [make_gauge("Temperature", temp_result[0]["value"], "° F", [0, 100], "#dc3545"), make_gauge("Relative Humidity", humidity_result[0]["value"], "%", [0, 100], "#17a2b8"), 
+    plant1_df = pd.DataFrame(plant_graphs[0], columns=["timestamp", "value"])
+    plant2_df = pd.DataFrame(plant_graphs[1], columns=["timestamp", "value"])
+    plant3_df = pd.DataFrame(plant_graphs[2], columns=["timestamp", "value"])
+    plant4_df = pd.DataFrame(plant_graphs[3], columns=["timestamp", "value"])
+    return [make_gauge("Temperature", temp_result[0][0], "° F", [0, 100], "#dc3545"), make_gauge("Relative Humidity", humidity_result[0][0], "%", [0, 100], "#17a2b8"), 
      px.line(sunlight_df, x='timestamp', y=sunlight_df.value, title='Sunlight', width=525, height=250),
      px.line(plant1_df, x='timestamp', y=plant1_df.value, width=450, height=300),
      px.line(plant2_df, x='timestamp', y=plant2_df.value, width=450, height=300),
@@ -104,11 +108,11 @@ def update_page(n_intervals):
      px.line(plant4_df, x='timestamp', y=plant4_df.value, width=450, height=300), # plant humidity graphs
      plant_misc[0][0], plant_misc[1][0], plant_misc[2][0], plant_misc[3][0], #names
      # plant humidities, under the assumption that groupby puts them into another group array based on the plant: ith plant, 0th entry, 0th value (humidity)
-     plant_graph_result[0][0][0], plant_graph_result[1][0][0], plant_graph_result[2][0][0], plant_graph_result[3][0][0],
+     plant_graphs[0][0][1], plant_graphs[1][0][1], plant_graphs[2][0][1], plant_graphs[3][0][1],
      # plant humidity targets
      plant_misc[0][1], plant_misc[1][1], plant_misc[2][1], plant_misc[3][1],
-     # plant_lastwatered, ith plant, most recent entry (0th), 1st value (timestamp)
-     plant_graph_result[0][0][1], plant_graph_result[1][0][1], plant_graph_result[2][0][1], plant_graph_result[3][0][1]]
+     # plant_lastwatered, ith plant, most recent entry (0th), 0th value (timestamp)
+     plant_graphs[0][0][0], plant_graphs[1][0][0], plant_graphs[2][0][0], plant_graphs[3][0][0]]
 
 
 layout = [

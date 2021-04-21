@@ -84,4 +84,5 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         raise ValueError(
             "Please execute the program: python3 index.py <MQTT_IP>")
+    check_plants()
     app.run_server(debug=True, port=8050, host="0.0.0.0")
