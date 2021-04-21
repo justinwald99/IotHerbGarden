@@ -47,16 +47,15 @@ def history_graph():
     metadata = MetaData()
     sample_table = Table("sample", metadata, autoload_with=engine)
     sensor_table = Table("sensor", metadata, autoload_with=engine)
+
     with engine.connect() as conn:
         data = conn.execute(
             select(sample_table.c.timestamp, sensor_table.c.name, sample_table.c.value, sensor_table.c.unit).
             join_from(sample_table, sensor_table).limit(100)
         ).fetchall()
-    if not data:
-        return go.Figure()
+
     df = pd.DataFrame(
         data, columns=["timestamp", "sensor_name", "value", "unit"])
-    print(df)
 
     fig = px.line(df, x="timestamp", y=df.value,
                   line_group="sensor_name", color="sensor_name", template="seaborn")

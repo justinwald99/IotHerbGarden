@@ -2,7 +2,12 @@ import dash_core_components as dcc
 from dash.dependencies import Input, Output
 import dash_html_components as html
 from app import app
+import plotly.express as px
+import plotly.graph_objects as go
+from sqlalchemy import Table, create_engine, select
+from sqlalchemy.sql.schema import MetaData
 from utils.ui_elements import history_graph
+import pandas as pd
 
 layout = [
     dcc.Interval(
@@ -94,7 +99,8 @@ layout = [
     html.Div(
         [
             dcc.Graph(
-                id="history_graph"
+                id="history_graph",
+                figure=go.Figure()
             )
         ],
         className="card my-2 p-2"
@@ -103,7 +109,25 @@ layout = [
 
 
 @app.callback(Output('history_graph', 'figure'),
-              Input('interval-component', 'n_intervals'))
-def update_graph_data(n):
+              Input('page-content', 'children'))
+def draw_graph(n):
     """Pull new data from the database to update the graph."""
     return history_graph()
+
+@app.callback(Output('history_graph', 'extend_data'),
+              Input('interval-component', 'n_intervals'))
+def update_graph(n):
+    """Update the graph as new data is collected."""
+    engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
+    metadata = MetaData()
+    sample_table = Table("sample", metadata, autoload_with=engine)
+    sensor_table = Table("sensor", metadata, autoload_with=engine)
+
+    with engine.connect() as conn:
+        data = conn.execute(
+            select(sample_table.c.timestamp, sensor_table.c.name, sample_table.c.value, sensor_table.c.unit).
+            join_from(sample_table, sensor_table).limit(100)
+        ).fetchall()
+
+    return data
+    
