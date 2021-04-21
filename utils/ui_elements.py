@@ -51,7 +51,9 @@ def history_graph():
     with engine.connect() as conn:
         data = conn.execute(
             select(sample_table.c.timestamp, sensor_table.c.name, sample_table.c.value, sensor_table.c.unit).
-            join_from(sample_table, sensor_table).limit(100)
+            join_from(sample_table, sensor_table)
+            .order_by(sample_table.c.timestamp.desc())
+            .limit(100)
         ).fetchall()
 
     df = pd.DataFrame(

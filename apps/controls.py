@@ -7,6 +7,7 @@ from dash.dependencies import Input, Output, State
 from app import app
 from apps import configuration, controls, history, overview
 import sys
+import json
 
 pumps = ["pump1", "pump2", "pump3", "pump4"]
 
@@ -78,7 +79,7 @@ def perform_pump(n_clicks, pump1, pump2, pump3, pump4):
         if pump1 > 0:
             publish.single(
                 "pumps/control/1",
-                payload=pump1,
+                payload=json.dumps({"duration":pump1}),
                 qos=2,
                 retain=False,
                 hostname=
@@ -87,29 +88,29 @@ def perform_pump(n_clicks, pump1, pump2, pump3, pump4):
         if pump2 > 0:
             publish.single(
                 "pumps/control/2",
-                payload=pump1,
+                payload=json.dumps({"duration":pump2}),
                 qos=2,
                 retain=False,
                 hostname=
-                "192.168.1.182",  ## TODO: Change hostname to be accurate
+                sys.argv[1],  ## TODO: Change hostname to be accurate
                 port=1883)
         if pump3 > 0:
             publish.single(
                 "pumps/control/3",
-                payload=pump1,
+                payload=json.dumps({"duration":pump3}),
                 qos=2,
                 retain=False,
                 hostname=
-                "192.168.1.182",  ## TODO: Change hostname to be accurate
+                sys.argv[1],  ## TODO: Change hostname to be accurate
                 port=1883)
         if pump4 > 0:
             publish.single(
                 "pumps/control/4",
-                payload=pump1,
+                payload=json.dumps({"duration":pump4}),
                 qos=2,
                 retain=False,
                 hostname=
-                "192.168.1.182",  ## TODO: Change hostname to be accurate
+                sys.argv[1],  ## TODO: Change hostname to be accurate
                 port=1883)
         return "Performing manual pump.."
     return ""

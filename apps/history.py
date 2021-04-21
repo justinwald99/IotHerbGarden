@@ -12,7 +12,7 @@ import pandas as pd
 layout = [
     dcc.Interval(
         id='interval-component',
-        interval=3*1000,  # in milliseconds
+        interval=1*1000,  # in milliseconds
         n_intervals=0
     ),
     html.H1("History"),
