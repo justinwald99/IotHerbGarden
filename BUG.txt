@@ -1,0 +1,54 @@
+Traceback (most recent call last):
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1705, in _execute_context
+    self.dialect.do_execute(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\default.py", line 716, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: attempt to write a readonly database
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "garden_manager.py", line 159, in <module>
+    client.loop_forever()
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 1779, in loop_forever
+    rc = self.loop(timeout, max_packets)
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 1181, in loop
+    rc = self.loop_read(max_packets)
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 1572, in loop_read
+    rc = self._packet_read()
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 2310, in _packet_read
+    rc = self._packet_handle()
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 2940, in _packet_handle
+    return self._handle_pubrel()
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 3246, in _handle_pubrel
+    self._handle_on_message(message)
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\paho\mqtt\client.py", line 3429, in _handle_on_message
+    callback(self, self._userdata, message)
+  File "garden_manager.py", line 98, in handle_sensors_data
+    create_sample(engine, metadata, payload)
+  File "C:\Users\Justin\Desktop\iot_herb_garden\utils\db_interaction.py", line 95, in create_sample
+    _make_generic_database_entry(engine, metadata, "sample", data)
+  File "C:\Users\Justin\Desktop\iot_herb_garden\utils\db_interaction.py", line 56, in _make_generic_database_entry
+    conn.execute(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\future\engine.py", line 295, in execute
+    return self._execute_20(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1520, in _execute_20
+    return meth(self, args_10style, kwargs_10style, execution_options)
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\sql\elements.py", line 313, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1389, in _execute_clauseelement
+    ret = self._execute_context(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1748, in _execute_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1929, in _handle_dbapi_exception
+    util.raise_(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\util\compat.py", line 211, in raise_
+    raise exception
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\base.py", line 1705, in _execute_context
+    self.dialect.do_execute(
+  File "C:\Users\Justin\Desktop\iot_herb_garden\venv\lib\site-packages\sqlalchemy\engine\default.py", line 716, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) attempt to write a readonly database
+[SQL: INSERT INTO sample (sensor_id, timestamp, value) VALUES (?, ?, ?)]
+[parameters: ('7', '2021-04-22 00:46:11.063650', 0)]
+(Background on this error at: http://sqlalche.me/e/14/e3q8)

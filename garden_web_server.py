@@ -9,6 +9,12 @@ from utils.db_interaction import create_plant
 from sqlalchemy import create_engine, text, Table, desc, select
 from sqlalchemy.sql.schema import MetaData
 
+# Setup database interaction
+engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
+metadata = MetaData()
+plant_table = Table("plant", metadata, autoload_with=engine)
+sensor_table = Table("sensor", metadata, autoload_with=engine)
+
 navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.NavLink("Overview", href="/")),
@@ -53,35 +59,53 @@ def display_page(pathname):
 
 
 def check_plants():
-    engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
-    metadata = MetaData()
-    plant_table = Table("plant", metadata, autoload_with=engine)
-    sensor_table = Table("sensor", metadata, autoload_with=engine)
+    """Check that every soil_humidity sensor has a plant associated with it.
+    
+    If there exists a soil_humidity sensor that does not have a plant associated,
+    create a new plant with default values in the DB.
+    """
     with engine.connect() as conn:
-        plants = conn.execute(
+        plant_ids = conn.execute(
             select(plant_table.c.id)
         ).fetchall()
+        # Convert list of tuples into list of ids.
+        plant_ids = [id for id, in plant_ids]
+
+        associated_sensor_ids = conn.execute(
+            select(plant_table.c.humidity_sensor_id)
+        ).fetchall()
+        associated_sensor_ids = [id for id, in associated_sensor_ids]
+
         humidity_sensors = conn.execute(
             select(sensor_table.c.id).where(sensor_table.c.type == 'soil_humidity')
         ).fetchall()
+        humidity_sensors = [id for id, in humidity_sensors]
+
         # now we have all plants and soil humidity sensors
-        diff = len(humidity_sensors) - len(plants)
-        if diff > 0:
-            for i in reversed(range(diff)):
+        for humidity_sensor_id in humidity_sensors:
+            # Create plants for every humidity sensor
+            if humidity_sensor_id  not in associated_sensor_ids:
+                # Plant with default values
                 create_plant(engine, metadata, {
-                    "id":len(humidity_sensors) - i,
-                    "name":f"plant_{len(humidity_sensors) - i}",
-                    "humidity_sensor_id":humidity_sensors[i][0], #make sure we don't have to index any further into it :) it's possible that you have to add an ["id"] at the end.
-                    "pump_id":len(humidity_sensors) - i,                     #maybe we can change this? currently pump_id is always the plant_id.
-                    "target":50,
-                    "watering_cooldown":300,
-                    "watering_duration":1,
-                    "humidity_tolerance":5
-                }) # id is len(humidity_sensors - i)
+                    # plant_ids is combined with single-element list to prevent max([])
+                    "name": f"plant_{max(plant_ids + [0]) + 1}",
+                    "humidity_sensor_id": humidity_sensor_id,
+                    "pump_id": max(plant_ids + [0]) + 1,
+                    "target": 50,
+                    "watering_cooldown": 300,
+                    "watering_duration": 1,
+                    "humidity_tolerance": 5
+                })
+                # Recursive call so we don't have to keep track of generated ids
+                check_plants()
+                return
             
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         raise ValueError(
             "Please execute the program: python3 index.py <MQTT_IP>")
+
+    check_plants()
+
     app.run_server(debug=True, port=8050, host="0.0.0.0")
