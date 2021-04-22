@@ -251,9 +251,13 @@ def handleSensors(selectedSensor, n_clicks):
     caller = ctx.triggered[0]['prop_id'].split('.')[0]
     if caller == 'selectedSensor':
         if selectedSensor is not None:
-            print(selectedSensor)
             selectedSensor = selectedSensor.split(",")
-            return no_update, selectedSensor[2], selectedSensor[4], rates[0], 0
+            secondsBetweenSamples = int(selectedSensor[4])
+            for rate in rates:
+                samplesPerRate = rate_mapping[rate] / secondsBetweenSamples
+                if (samplesPerRate.is_integer()):
+                    return no_update, selectedSensor[2], samplesPerRate, rate, 0
+            return no_update, selectedSensor[2], -1, rates[0], 0
     else:
         return None, '',  0, None, 0
 
