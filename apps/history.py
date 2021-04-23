@@ -1,20 +1,16 @@
-import dash
-from dash_bootstrap_components._components.InputGroup import InputGroup
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
-import dash_html_components as html
-from sqlalchemy.sql import annotation
-from sqlalchemy.sql.elements import between, or_
-from app import app
-import plotly.express as px
-import plotly.graph_objects as go
-from sqlalchemy import Table, create_engine, select
-from sqlalchemy.sql.schema import MetaData
-import pandas as pd
-from dash.exceptions import PreventUpdate
 import datetime as dt
-from time import perf_counter
+
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+import pandas as pd
+import plotly.graph_objects as go
+from app import app
+from dash.dependencies import Input, Output
+from dash.exceptions import PreventUpdate
+from sqlalchemy import Table, create_engine, select
+from sqlalchemy.sql.elements import between
+from sqlalchemy.sql.schema import MetaData
 
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
 metadata = MetaData()
@@ -138,13 +134,13 @@ def get_plant_traces(plant_ids, fields):
             ).fetchall()
             data = pd.DataFrame(result, columns=["timestamp", "sensor_name", "value", "unit", "target"])
             if "soil_humidity" in fields:
-                traces.append(go.Scattergl(
+                traces.append(go.Scatter(
                     x=data["timestamp"],
                     y=data["value"],
                     name=data["sensor_name"][0] + " Soil Humidity"))
 
             if "humidity_target" in fields:
-                traces.append(go.Scattergl(
+                traces.append(go.Scatter(
                     x=data["timestamp"],
                     y=data["target"],
                     name=data["sensor_name"][0] + " Humidity Target"))
@@ -183,7 +179,7 @@ def get_ambient_traces(selected_sensors):
                 .where(sensor_table.c.id == sensor_id)
             ).fetchall()
             data = pd.DataFrame(result, columns=["timestamp", "sensor_name", "value", "unit"])
-            traces.append(go.Scattergl(x=data["timestamp"], y=data["value"], name=data["sensor_name"][0]))
+            traces.append(go.Scatter(x=data["timestamp"], y=data["value"], name=data["sensor_name"][0]))
     return traces
 
 
@@ -202,9 +198,7 @@ def draw_graph(ambient_options, plant_options, fields, relay_out_data):
         data_start = dt.datetime.fromisoformat(relay_out_data["xaxis.range[0]"])
 
     elif (relay_out_data and "xaxis.range[0]" in relay_out_data.keys()):
-        raise PreventUpdate
-
-    print(dash.callback_context.triggered)
+        return dash.no_update
 
     fig = go.Figure()
 
