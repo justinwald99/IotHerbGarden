@@ -68,7 +68,7 @@ rate_mapping = {
 }
 
 def get_plant_payload(id, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
-    return json.dumps({"id":id, "name":name, "sensor":humiditySensor, "pump":pump, "target":targetHumidity,
+    return json.dumps({"id":id, "name":name, "humidity_sensor_id":humiditySensor, "pump_id":pump, "target":targetHumidity,
      "watering_cooldown":wateringCooldown, "watering_duration":wateringDuration, "humidity_tolerance":humidityTolerance})
 
 

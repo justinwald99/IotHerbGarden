@@ -60,7 +60,7 @@ def display_page(pathname):
 
 def check_plants():
     """Check that every soil_humidity sensor has a plant associated with it.
-    
+
     If there exists a soil_humidity sensor that does not have a plant associated,
     create a new plant with default values in the DB.
     """
@@ -77,14 +77,15 @@ def check_plants():
         associated_sensor_ids = [id for id, in associated_sensor_ids]
 
         humidity_sensors = conn.execute(
-            select(sensor_table.c.id).where(sensor_table.c.type == 'soil_humidity')
+            select(sensor_table.c.id).where(
+                sensor_table.c.type == 'soil_humidity')
         ).fetchall()
         humidity_sensors = [id for id, in humidity_sensors]
 
         # now we have all plants and soil humidity sensors
         for humidity_sensor_id in humidity_sensors:
             # Create plants for every humidity sensor
-            if humidity_sensor_id  not in associated_sensor_ids:
+            if humidity_sensor_id not in associated_sensor_ids:
                 # Plant with default values
                 create_plant(engine, metadata, {
                     # plant_ids is combined with single-element list to prevent max([])
@@ -99,7 +100,7 @@ def check_plants():
                 # Recursive call so we don't have to keep track of generated ids
                 check_plants()
                 return
-            
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
