@@ -1,16 +1,21 @@
 import datetime as dt
+import json
 
+import re
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+from numpy import tri
 import pandas as pd
 import plotly.graph_objects as go
+from sqlalchemy.sql.expression import false
 from app import app
 from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 from sqlalchemy import Table, create_engine, select
 from sqlalchemy.sql.elements import between
 from sqlalchemy.sql.schema import MetaData
+import itertools
 
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
 metadata = MetaData()
@@ -89,9 +94,12 @@ layout = [
                         [
                             dcc.Checklist(
                                 options=[
-                                    {"label": "Soil Humidity", "value": "soil_humidity"},
-                                    {"label": "Humidity Target", "value": "humidity_target"},
-                                    {"label": "Pump Activated", "value": "pump_activated"}
+                                    {"label": "Soil Humidity",
+                                        "value": "soil_humidity"},
+                                    {"label": "Humidity Target",
+                                        "value": "humidity_target"},
+                                    {"label": "Pump Activated",
+                                        "value": "pump_activated"}
                                 ],
                                 value=["soil_humidity"],
                                 labelStyle={"display": "block"},
@@ -118,6 +126,36 @@ layout = [
 ]
 
 
+def set_start_date():
+    """Set the global var start date based on the from_date specified by the user.
+
+    Return true if data needs to be reloaded
+    """
+    # Update the amount of data cleared if the user wants data older than current value.
+    global data_start
+
+    triggered = dash.callback_context.triggered[0]
+
+    # Reset start_date on fresh load.
+    if triggered["prop_id"] == "history_graph.relayoutData" and triggered["value"] == {"autosize": True}:
+        data_start = dt.datetime.now() - dt.timedelta(hours=12)
+        return True
+
+    if (triggered["prop_id"] == "history_graph.relayoutData" and
+            "xaxis.range[0]" in triggered["value"].keys()):
+        # Chop ms to conform to iso standard.
+        date_str = re.match("\d{4}-\d{2}-\d{0,2} ?\d{0,2}:?\d{0,2}:?\d{0,2}",
+                            triggered["value"]["xaxis.range[0]"]).group()
+        from_date = dt.datetime.fromisoformat(date_str)
+
+        if (from_date < data_start):
+            data_start = from_date
+            return True
+        return False
+
+    return False
+
+
 def get_plant_traces(plant_ids, fields):
     """Generate the traces for plant specific sensors."""
     # Get plant data
@@ -125,14 +163,16 @@ def get_plant_traces(plant_ids, fields):
     with engine.connect() as conn:
         for plant_id in plant_ids:
             result = conn.execute(
-                select(sample_table.c.timestamp, sensor_table.c.name, sample_table.c.value, sensor_table.c.unit, plant_table.c.target)
+                select(sample_table.c.timestamp, sensor_table.c.name,
+                       sample_table.c.value, sensor_table.c.unit, plant_table.c.target)
                 .join_from(sample_table, sensor_table)
                 .join_from(sensor_table, plant_table)
                 .order_by(sample_table.c.timestamp.desc())
                 .where(between(sample_table.c.timestamp, data_start, dt.datetime.now()))
                 .where(plant_table.c.id == plant_id)
             ).fetchall()
-            data = pd.DataFrame(result, columns=["timestamp", "sensor_name", "value", "unit", "target"])
+            data = pd.DataFrame(
+                result, columns=["timestamp", "sensor_name", "value", "unit", "target"])
             if "soil_humidity" in fields:
                 traces.append(go.Scatter(
                     x=data["timestamp"],
@@ -152,7 +192,8 @@ def add_watering_events(plant_ids, figure):
     with engine.connect() as conn:
         for plant_id in plant_ids:
             result = conn.execute(
-                select(watering_table.c.timestamp, watering_table.c.duration, plant_table.c.name)
+                select(watering_table.c.timestamp,
+                       watering_table.c.duration, plant_table.c.name)
                 .join_from(watering_table, plant_table)
                 .order_by(watering_table.c.timestamp.desc())
                 .where(between(watering_table.c.timestamp, data_start, dt.datetime.now()))
@@ -172,14 +213,17 @@ def get_ambient_traces(selected_sensors):
     with engine.connect() as conn:
         for sensor_id in selected_sensors:
             result = conn.execute(
-                select(sample_table.c.timestamp, sensor_table.c.name, sample_table.c.value, sensor_table.c.unit)
+                select(sample_table.c.timestamp, sensor_table.c.name,
+                       sample_table.c.value, sensor_table.c.unit)
                 .join_from(sample_table, sensor_table)
                 .order_by(sample_table.c.timestamp.desc())
                 .where(between(sample_table.c.timestamp, data_start, dt.datetime.now()))
                 .where(sensor_table.c.id == sensor_id)
             ).fetchall()
-            data = pd.DataFrame(result, columns=["timestamp", "sensor_name", "value", "unit"])
-            traces.append(go.Scatter(x=data["timestamp"], y=data["value"], name=data["sensor_name"][0]))
+            data = pd.DataFrame(
+                result, columns=["timestamp", "sensor_name", "value", "unit"])
+            traces.append(go.Scatter(
+                x=data["timestamp"], y=data["value"], name=data["sensor_name"][0]))
     return traces
 
 
@@ -190,14 +234,19 @@ def get_ambient_traces(selected_sensors):
               Input('history_graph', 'relayoutData'))
 def draw_graph(ambient_options, plant_options, fields, relay_out_data):
     """Draw the history graph for the first time"""
+    update_required_triggers = ["ambient_options.value",
+                                "plant_options.value", "field_options.value"]
 
-    # Update the amount of data cleared if the user wants data older than current value.
-    global data_start
-    if (relay_out_data and "xaxis.range[0]" in relay_out_data.keys() and
-        dt.datetime.fromisoformat(relay_out_data["xaxis.range[0]"]) < data_start):
-        data_start = dt.datetime.fromisoformat(relay_out_data["xaxis.range[0]"])
+    triggered = dash.callback_context.triggered
+    triggered_ids = [x["prop_id"] for x in triggered]
 
-    elif (relay_out_data and "xaxis.range[0]" in relay_out_data.keys()):
+    update_required = False
+    for id in triggered_ids:
+        if id in update_required_triggers:
+            update_required = True
+
+    # Set the start date, then update graph only if needed
+    if not set_start_date() and not update_required:
         return dash.no_update
 
     fig = go.Figure()
@@ -224,9 +273,9 @@ def draw_graph(ambient_options, plant_options, fields, relay_out_data):
     return fig
 
 
-@app.callback(Output("ambient_options", "options"),
-              Output("ambient_options", "value"),
-              Input("page-content", "children"))
+@ app.callback(Output("ambient_options", "options"),
+               Output("ambient_options", "value"),
+               Input("page-content", "children"))
 def load_ambient_sensors(children):
     """Load list of ambient sensors for checkbox."""
     ambient_sensor_types = ["ambient_temperature", "ambient_humidity", "light"]
@@ -238,9 +287,9 @@ def load_ambient_sensors(children):
     return ([{"label": name, "value": id} for id, name in data], [id for id, name in data])
 
 
-@app.callback(Output("plant_options", "options"),
-              Output("plant_options", "value"),
-              Input("page-content", "children"))
+@ app.callback(Output("plant_options", "options"),
+               Output("plant_options", "value"),
+               Input("page-content", "children"))
 def load_plants(children):
     """Load list of plants for checkbox."""
     with engine.connect() as conn:
@@ -248,4 +297,3 @@ def load_plants(children):
             select(plant_table.c.id, plant_table.c.name)
         ).fetchall()
     return ([{"label": name, "value": id} for id, name in data], [id for id, name in data])
-
