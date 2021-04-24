@@ -1,6 +1,6 @@
 """Utility class that standarizes interaction with different sensors."""
-from datetime import datetime as dt
 import time
+from datetime import datetime as dt
 
 import adafruit_dht
 

@@ -7,16 +7,15 @@ import time
 from datetime import datetime as dt
 
 import board
+import colorama
+import paho.mqtt.client as mqtt
 from colorama.ansi import Fore
 from gpiozero.output_devices import OutputDevice
-import paho.mqtt.client as mqtt
-from gpiozero import GPIODevice
 
 from utils.adc_library import ADS7830
 from utils.common import connection_message, get_broker_ip, parse_json_payload
 from utils.sensors import (ambient_humidity, ambient_temperature, dht_22,
                            light, soil_humidity)
-import colorama
 
 # Create the MQTT client
 client = mqtt.Client("garden_monitor")
@@ -46,7 +45,7 @@ config_logger = logging.getLogger(Fore.WHITE + "config_log")
 pump_logger = logging.getLogger(Fore.BLUE + "pump_log")
 
 logging.basicConfig(
-    level="INFO", format= f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
+    level="INFO", format=f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
 
 # Register pumps on GPIO pins
 pump1 = OutputDevice("GPIO26", active_high=False)
@@ -135,7 +134,6 @@ def activate_pump(pump_id, duration, lock):
         pump_logger.info(f"Pump {pump_id} deactivated")
 
 
-
 def sample_routine():
     """Run the main routines of the program.
 
@@ -150,7 +148,8 @@ def sample_routine():
                 "value": value,
                 "timestamp": timestamp.isoformat()
             }
-            client.publish(f'sensors/data/{id}', payload=json.dumps(payload), qos=2)
+            client.publish(f'sensors/data/{id}',
+                           payload=json.dumps(payload), qos=2)
             sample_logger.info(
                 f"Published {value}{sensor.unit} for sensor_id {id}")
 
@@ -168,7 +167,8 @@ def handle_pumps_control(client, userdata, msg):
 
     pump_id = msg.topic.split("/")[-1]
 
-    new_thread = threading.Thread(target=activate_pump, args=(pump_id, data["duration"], pump_lock))
+    new_thread = threading.Thread(target=activate_pump, args=(
+        pump_id, data["duration"], pump_lock))
     new_thread.start()
 
 

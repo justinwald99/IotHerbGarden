@@ -1,13 +1,15 @@
-import dash
-import paho.mqtt.publish as publish
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
-from app import app
-from apps import configuration, controls, history, overview
-import sys
 import json
+import sys
+
+import dash
+import dash_bootstrap_components as dbc
+import dash_core_components as dcc
+import dash_html_components as html
+import paho.mqtt.publish as publish
+from app import app
+from dash.dependencies import Input, Output, State
+
+from apps import configuration, controls, history, overview
 
 pumps = ["pump1", "pump2", "pump3", "pump4"]
 

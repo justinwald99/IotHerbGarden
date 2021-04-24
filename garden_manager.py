@@ -5,18 +5,18 @@ well as the automation of watering events.
 
 """
 import json
-from datetime import datetime as dt
 import logging
-import colorama
-from colorama.ansi import Fore
+from datetime import datetime as dt
 
+import colorama
 import paho.mqtt.client as mqtt
+from colorama.ansi import Fore
 from sqlalchemy import MetaData, create_engine, select
-from sqlalchemy.engine.base import NestedTransaction
 from sqlalchemy.sql.schema import Table
 
-from utils.common import get_broker_ip, parse_json_payload, connection_message
-from utils.db_interaction import create_db, create_sensor, create_sample, create_plant, create_watering_event
+from utils.common import connection_message, get_broker_ip, parse_json_payload
+from utils.db_interaction import (create_db, create_plant, create_sample,
+                                  create_sensor, create_watering_event)
 
 # DB objects
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
@@ -37,12 +37,12 @@ mqtt_logger = logging.getLogger(Fore.MAGENTA + "mqtt_log")
 config_logger = logging.getLogger(Fore.BLUE + "config_log")
 
 logging.basicConfig(
-    level="INFO", format= f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
+    level="INFO", format=f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
 
 
 def check_watering(msg):
     """Check whether a plant needs to be watered by a pump
-    
+
     Parameters
     ----------
     msg : dict
@@ -79,8 +79,11 @@ def check_watering(msg):
             payload = {
                 "duration": duration
             }
-            mqtt_logger.info(f"Published pumps/control/{pump_id}: {json.dumps(payload, indent=4)}")
-            client.publish(f"pumps/control/{pump_id}", payload=json.dumps(payload), qos=2)
+            mqtt_logger.info(
+                f"Published pumps/control/{pump_id}: {json.dumps(payload, indent=4)}")
+            client.publish(
+                f"pumps/control/{pump_id}", payload=json.dumps(payload), qos=2)
+
 
 def on_connect(client, userdata, flags, rc):
     """Print when the MQTT broker accepts the connection."""
@@ -91,7 +94,8 @@ def handle_pumps_control(client, userdata, msg):
     """Log a watering event in the database."""
     plant_table = Table("plant", metadata, autoload_with=engine)
     payload = parse_json_payload(msg)
-    mqtt_logger.info(f"Received pump event for pump_id {msg.topic.split('/')[-1]}: {json.dumps(payload, indent=4)}")
+    mqtt_logger.info(
+        f"Received pump event for pump_id {msg.topic.split('/')[-1]}: {json.dumps(payload, indent=4)}")
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -146,7 +150,7 @@ def handle_sensors_data(client, userdata, msg):
     )
 
     create_sample(engine, metadata, payload)
-    
+
     with engine.connect() as conn:
         result = conn.execute(
             select(sensor_table.c.type)

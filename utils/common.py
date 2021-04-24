@@ -1,7 +1,7 @@
 """Common methods for reuse."""
 import json
-import sys
 import re
+import sys
 
 
 def _usage_prompt(script_name):

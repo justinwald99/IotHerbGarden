@@ -1,14 +1,14 @@
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
-from dash import callback_context, no_update
-import paho.mqtt.publish as publish
 import json
-from app import app
 import sys
 
-from sqlalchemy import MetaData, create_engine, select, Table
+import dash_bootstrap_components as dbc
+import dash_core_components as dcc
+import dash_html_components as html
+import paho.mqtt.publish as publish
+from app import app
+from dash import callback_context, no_update
+from dash.dependencies import Input, Output, State
+from sqlalchemy import MetaData, Table, create_engine, select
 
 # DB objects
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
