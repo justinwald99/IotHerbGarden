@@ -53,6 +53,8 @@ def getDBData():
             sensorTable.c.unit,
             sensorTable.c.sample_gap
         )).fetchall()
+    print(plantsData)
+    print(sensorsData)
 
 #plants = ['PlantId1', 'PlantId2', 'PlantId3', 'PlantId4']
 #sensors = ['Sensor1', 'Sensor2', 'Sensor3', 'Sensor4']
@@ -127,7 +129,7 @@ layout = [
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Humidity Tolerance", className="col-md-3"),
-                                dcc.Input(id="humidityTolerance", type="number", min=0, max=100, className="col-md-3"),
+                                dcc.Input(id="humidityTolerance", type="number", min=0, max=50, className="col-md-3"),
                                 html.H5("+/- %", className="px-2")
                             ], className="py-2"),
                             html.Span([
@@ -216,25 +218,14 @@ def handlePlants(selectedPlant, n_clicks):
     State('humidityTolerance', 'value') # save humidity tolerance
 )
 def savePlants(n_clicks, selectedPlant, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
-    invalidReturnString = ""
+    
     if (n_clicks > 0):
-        if targetHumidity < 0 or targetHumidity > 100:
-            invalidReturnString += "Invalid Target Humidity [0,100]\n"
-        if wateringCooldown < 0:
-            invalidReturnString += "Invalid Watering Cooldown >0\n"
-        if wateringDuration <= 0 or wateringDuration > 5:
-            invalidReturnString += "Invalid Watering Duration (0,5]\n"
-        if humidityTolerance > 50 or humidityTolerance < 0:
-            invalidReturnString += "Invalid Humidity Tolerance [0,50]\n"
-        if invalidReturnString == "":
-            selectedPlant = selectedPlant.split(",")
-            publish.single(f"plants/config", payload=get_plant_payload(selectedPlant[0], name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
-                qos=2, retain=True, hostname=sys.argv[1], ## TODO: Change hostname to be accurate
-                port=1883)
-            getDBData()
-            return html.H5("Plants saved", id="plants_out_text")
-        else:
-            return html.H5(invalidReturnString, id="plants_out_text")
+        selectedPlant = selectedPlant.split(",")
+        publish.single(f"plants/config", payload=get_plant_payload(selectedPlant[0], name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
+            qos=2, retain=True, hostname=sys.argv[1], ## TODO: Change hostname to be accurate
+            port=1883)
+        getDBData()
+        return html.H5("Plants saved", id="plants_out_text")
     return None
 
 @app.callback(
@@ -275,7 +266,7 @@ def saveSensors(n_clicks, selectedSensor, sensor_label, samples, rate):
     if (n_clicks > 0):
         if samples < 0:
             return html.H5("Invalid samples (>0)", id="sensors_out_text")
-        time_between_samples = int(samples / rate_mapping[rate])
+        time_between_samples = int(rate_mapping[rate] / samples)
         selectedSensor = selectedSensor.split(",")
         publish.single(topic=f"sensors/config", payload=json.dumps({"id":selectedSensor[0], "type":selectedSensor[1], "name":sensor_label, "unit":selectedSensor[3], "sample_gap":time_between_samples}),
             qos=2, retain=True, hostname=sys.argv[1], port=1883)
