@@ -1,87 +1,88 @@
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output, State
-from dash import callback_context, no_update
-import paho.mqtt.publish as publish
 import json
-from app import app
+import logging
 import sys
+import time
 
-from sqlalchemy import MetaData, create_engine, select, Table
+import colorama
+import dash_bootstrap_components as dbc
+import dash_core_components as dcc
+import dash_html_components as html
+import paho.mqtt.publish as publish
+from app import app
+from colorama import Fore
+from dash import callback_context, no_update
+from dash.dependencies import Input, Output, State
+from sqlalchemy import MetaData, Table, create_engine, select
 
 # DB objects
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
 metadata = MetaData()
-plantTable = Table("plant", metadata, autoload_with=engine)
-sensorTable = Table("sensor", metadata, autoload_with=engine)
-with engine.connect() as conn:
-        plantsData = conn.execute(select(
-            plantTable.c.id,
-            plantTable.c.name,
-            plantTable.c.humidity_sensor_id,
-            plantTable.c.pump_id,
-            plantTable.c.target,
-            plantTable.c.watering_cooldown,
-            plantTable.c.watering_duration,
-            plantTable.c.humidity_tolerance
-        )).fetchall()
-        sensorsData = conn.execute(select(
-            sensorTable.c.id,
-            sensorTable.c.type,
-            sensorTable.c.name,
-            sensorTable.c.unit,
-            sensorTable.c.sample_gap
-        )).fetchall()
+plant_table = Table("plant", metadata, autoload_with=engine)
+sensor_table = Table("sensor", metadata, autoload_with=engine)
 
-def getDBData():
-    with engine.connect() as conn:
-        plantsData = conn.execute(select(
-            plantTable.c.id,
-            plantTable.c.name,
-            plantTable.c.humidity_sensor_id,
-            plantTable.c.pump_id,
-            plantTable.c.target,
-            plantTable.c.watering_cooldown,
-            plantTable.c.watering_duration,
-            plantTable.c.humidity_tolerance
-        )).fetchall()
-        sensorsData = conn.execute(select(
-            sensorTable.c.id,
-            sensorTable.c.type,
-            sensorTable.c.name,
-            sensorTable.c.unit,
-            sensorTable.c.sample_gap
-        )).fetchall()
-    print(plantsData)
-    print(sensorsData)
 
-#plants = ['PlantId1', 'PlantId2', 'PlantId3', 'PlantId4']
-#sensors = ['Sensor1', 'Sensor2', 'Sensor3', 'Sensor4']
-pumps = ['Pump1', 'Pump2', 'Pump3', 'Pump4']
-rates = ['second', 'minute', 'hour']
+pump_list = [
+    (1, "pump_1"),
+    (2, "pump_2"),
+    (3, "pump_3"),
+    (4, "pump_4")
+]
+
+rates = ["second", "minute", "hour"]
 
 rate_mapping = {
-    'second': 1,
-    'minute': 60,
-    'hour': 3600
+    "second": 1,
+    "minute": 60,
+    "hour": 3600
 }
 
-def get_plant_payload(id, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
-    return json.dumps({"id":id, "name":name, "humidity_sensor_id":humiditySensor, "pump_id":pump, "target":targetHumidity,
-     "watering_cooldown":wateringCooldown, "watering_duration":wateringDuration, "humidity_tolerance":humidityTolerance})
+# Init color engine
+colorama.init()
+
+# Logging setup
+mqtt_logger = logging.getLogger(Fore.MAGENTA + "mqtt_log")
+
+logging.basicConfig(
+    level="INFO", format=f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
+
+
+def get_plant_ids():
+    """Return the ids of plants in the database."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            select(plant_table.c.id, plant_table.c.name)
+        ).fetchall()
+    return [{"label": name, "value": id} for id, name in result]
+
+
+def get_soil_humidity_sensors():
+    """Get a list of soil_humidity sensors."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            select(sensor_table.c.id, sensor_table.c.name)
+            .where(sensor_table.c.type == "soil_humidity")
+        ).fetchall()
+    return [{"label": name, "value": id} for id, name in result]
+
+
+def get_all_sensors():
+    """Get a list of all sensors."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            select(sensor_table.c.id, sensor_table.c.name)
+        ).fetchall()
+    return [{"label": name, "value": id} for id, name in result]
 
 
 layout = [
     html.H1("Configuration"),
     dbc.Tabs([
-        dbc.Tab(label='Plants', children=[
+        dbc.Tab(label="Plants", children=[
             html.Div(
                 [
                     dbc.Select(
-                        id='selectedPlant',
-                        options=[{'label': plant[1], 'value': list(plant)}
-                                 for plant in plantsData]
+                        id="selectedPlant",
+                        options=get_plant_ids()
                     )
                 ],
                 className="col-md-3 m-4"
@@ -93,61 +94,73 @@ layout = [
                         [
                             dbc.InputGroup([
                                 html.H5("Name", className="col-md-3"),
-                                dcc.Input(id="name", type="text", className="col-md-3")
+                                dcc.Input(id="name", type="text",
+                                          className="col-md-3")
                             ], className="py-2"),
                             dbc.InputGroup([
-                                html.H5("Humidity Sensor", className="col-md-3"),
+                                html.H5("Humidity Sensor",
+                                        className="col-md-3"),
                                 dbc.Select(
-                                    id='humiditySensor',
-                                    options=[{'label': sensor[2], 'value': sensor[0]} for sensor in sensorsData],
+                                    id="humiditySensor",
+                                    options=get_soil_humidity_sensors(),
                                     className="col-md-3"
                                 )
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Pump", className="col-md-3"),
                                 dbc.Select(
-                                    id='pump',
-                                    options=[{'label': pump, 'value': pump} for pump in pumps],
+                                    id="pump",
+                                    options=[{"label": name, "value": id}
+                                             for id, name in pump_list],
                                     className="col-md-3"
                                 )
                             ], className="py-2"),
                             dbc.InputGroup([
-                                html.H5("Target Humidity", className="col-md-3"),
+                                html.H5("Target Humidity",
+                                        className="col-md-3"),
                                 dcc.Input(id="targetHumidity", type="number", min=0, max=100,
                                           className="col-md-3"),
                                 html.H5("%", className="px-2")
                             ], className="py-2"),
                             dbc.InputGroup([
-                                html.H5("Watering Cooldown", className="col-md-3"),
-                                dcc.Input(id="wateringCooldown", type="number", min=0, className="col-md-3"),
+                                html.H5("Watering Cooldown",
+                                        className="col-md-3"),
+                                dcc.Input(
+                                    id="wateringCooldown", type="number", min=0, className="col-md-3"),
                                 html.H5("Seconds", className="px-2")
                             ], className="py-2"),
                             dbc.InputGroup([
-                                html.H5("Watering Duration", className="col-md-3"),
-                                dcc.Input(id="wateringDuration", type="number", min=0, className="col-md-3"),
+                                html.H5("Watering Duration",
+                                        className="col-md-3"),
+                                dcc.Input(
+                                    id="wateringDuration", type="number", min=0, className="col-md-3"),
                                 html.H5("Seconds", className="px-2")
                             ], className="py-2"),
                             dbc.InputGroup([
-                                html.H5("Humidity Tolerance", className="col-md-3"),
-                                dcc.Input(id="humidityTolerance", type="number", min=0, max=50, className="col-md-3"),
+                                html.H5("Humidity Tolerance",
+                                        className="col-md-3"),
+                                dcc.Input(id="humidityTolerance", type="number",
+                                          min=0, max=50, className="col-md-3"),
                                 html.H5("+/- %", className="px-2")
                             ], className="py-2"),
                             html.Span([
-                                dbc.Button('Cancel', id='cancel_plants', n_clicks=0),
-                                dbc.Button('Save', id='save_plants', n_clicks=0),
-                                html.H5(id='plants_out')
+                                dbc.Button(
+                                    "Cancel", id="cancel_plants", n_clicks=0),
+                                dbc.Button(
+                                    "Save", id="save_plants", n_clicks=0),
+                                html.H5(id="plants_out")
                             ], className="offset-md-9")
                         ],
                         className="card-body")
                 ],
                 className="card"),
         ]),
-        dbc.Tab(label='Sensors', children=[
+        dbc.Tab(label="Sensors", children=[
             html.Div(
                 [
                     dbc.Select(
-                        id='selectedSensor',
-                        options=[{'label': sensor[2], 'value': list(sensor)} for sensor in sensorsData]
+                        id="selectedSensor",
+                        options=get_all_sensors()
                     )
                 ], className="col-md-3 m-4"),
             html.Div(
@@ -157,22 +170,27 @@ layout = [
                         [
                             dbc.InputGroup([
                                 html.H5("Name", className="col-md-3"),
-                                dcc.Input(id="sensor_label", type="text", className="col-md-3")
+                                dcc.Input(id="sensor_label",
+                                          type="text", className="col-md-3")
                             ], className="py-2"),
                             dbc.InputGroup([
                                 html.H5("Samples", className="col-md-3"),
-                                dcc.Input(id="samples", type="number", min=0, className="col-md-3"),
+                                dcc.Input(id="samples", type="number",
+                                          min=0, className="col-md-3"),
                                 html.H5("per", className="px-2"),
                                 dbc.Select(
-                                    id='rate',
-                                    options=[{'label': rate, 'value': rate} for rate in rates],
+                                    id="rate",
+                                    options=[{"label": rate, "value": rate}
+                                             for rate in rates],
                                     className="col-md-3"
                                 )
                             ], className="py-2"),
                             html.Div([
-                                dbc.Button('Cancel', id='cancel_sensors', n_clicks=0),
-                                dbc.Button('Save', id='save_sensors', n_clicks=0),
-                                html.H5(id='sensors_out')
+                                dbc.Button(
+                                    "Cancel", id="cancel_sensors", n_clicks=0),
+                                dbc.Button(
+                                    "Save", id="save_sensors", n_clicks=0),
+                                html.H5(id="sensors_out")
                             ], className="offset-md-9")
                         ],
                         className="card-body")
@@ -181,95 +199,137 @@ layout = [
     ])
 ]
 
+
 @app.callback(
-    Output('selectedPlant', 'value'),
-    Output('name', 'value'),
-    Output('humiditySensor', 'value'),
-    Output('pump', 'value'),
-    Output('targetHumidity', 'value'),
-    Output('wateringCooldown', 'value'),
-    Output('wateringDuration', 'value'),
-    Output('humidityTolerance', 'value'),
-    Output('save_plants', 'n_clicks'),
-    Input('selectedPlant','value'),
-    Input('cancel_plants', 'n_clicks')
+    Output("name", "value"),
+    Output("humiditySensor", "value"),
+    Output("pump", "value"),
+    Output("targetHumidity", "value"),
+    Output("wateringCooldown", "value"),
+    Output("wateringDuration", "value"),
+    Output("humidityTolerance", "value"),
+    Input("selectedPlant", "value"),
+    Input("cancel_plants", "n_clicks")
 )
-def handlePlants(selectedPlant, n_clicks):
-    ctx = callback_context
-    caller = ctx.triggered[0]['prop_id'].split('.')[0]
-    if caller == 'selectedPlant':
-        if selectedPlant is not None:
-            selectedPlant = selectedPlant.split(",")
-            return no_update, selectedPlant[1], selectedPlant[2], selectedPlant[3], selectedPlant[4], selectedPlant[5], selectedPlant[6], selectedPlant[7], 0
-    else:
-        return None, '', None, None, 0, 0, 0, 0, 0
+def load_plant_config(selected_plant, n_clicks):
+    """Load the existing config for the selected plant."""
+    caller = callback_context.triggered[0]["prop_id"]
+
+    if caller == "selectedPlant.value" and selected_plant:
+        with engine.connect() as conn:
+            result = conn.execute(
+                select(plant_table, sensor_table.c.name)
+                .join(sensor_table, sensor_table.c.id)
+                .where(plant_table.c.id == selected_plant)
+            ).fetchone()
+        id, name, sensor_id, pump_id, target, cooldown, duration, tolerance, sensor_name = result
+        return name, sensor_id, pump_id, target, cooldown, duration, tolerance
+
+    return "", None, None, 0, 0, 0, 0
 
 
 @app.callback(
-    Output('plants_out', 'children'),
-    Input('save_plants', 'n_clicks'),
-    State('selectedPlant', 'value'), # save plant id
-    State('name', 'value'), # save plant name
-    State('humiditySensor', 'value'), # save humidity sensor
-    State('pump', 'value'), # save pump
-    State('targetHumidity', 'value'), #save target humidity
-    State('wateringCooldown', 'value'), #save watering cooldown
-    State('wateringDuration', 'value'), # save watering duration
-    State('humidityTolerance', 'value') # save humidity tolerance
+    Output("plants_out", "children"),
+    Output("selectedPlant", "options"),
+    Input("save_plants", "n_clicks"),
+    State("selectedPlant", "value"),
+    State("name", "value"),
+    State("humiditySensor", "value"),
+    State("pump", "value"),
+    State("targetHumidity", "value"),
+    State("wateringCooldown", "value"),
+    State("wateringDuration", "value"),
+    State("humidityTolerance", "value")
 )
-def savePlants(n_clicks, selectedPlant, name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance):
-    
+def savePlants(n_clicks, selectedPlant, name, humidity_sensor_id, pump_id, target,
+               watering_cooldown, watering_duration, humidity_tolerance):
+    """Save the plant config to the database."""
     if (n_clicks > 0):
-        selectedPlant = selectedPlant.split(",")
-        publish.single(f"plants/config", payload=get_plant_payload(selectedPlant[0], name, humiditySensor, pump, targetHumidity, wateringCooldown, wateringDuration, humidityTolerance), 
-            qos=2, retain=True, hostname=sys.argv[1], ## TODO: Change hostname to be accurate
-            port=1883)
-        getDBData()
-        return html.H5("Plants saved", id="plants_out_text")
-    return None
+        payload = {
+            "id": int(selectedPlant),
+            "name": name,
+            "humidity_sensor_id": int(humidity_sensor_id),
+            "pump_id": pump_id,
+            "target": target,
+            "watering_cooldown": watering_cooldown,
+            "watering_duration": watering_duration,
+            "humidity_tolerance": humidity_tolerance
+        }
+        publish.single(f"plants/config", payload=json.dumps(payload), qos=2,
+                       hostname=sys.argv[1], port=1883)
 
-@app.callback(
-    Output('selectedSensor', 'value'),
-    Output('sensor_label', 'value'),
-    Output('samples', 'value'),
-    Output('rate', 'value'),
-    Output('save_sensors', 'n_clicks'),
-    Input('selectedSensor', 'value'),
-    Input('cancel_sensors', 'n_clicks')
+        mqtt_logger.info(
+            f"Published to /plants/config: {json.dumps(payload, indent=4)}")
+
+        # Wait for the plant to be updated
+        time.sleep(1)
+
+        return html.H5("Plants saved", id="plants_out_text"), get_plant_ids()
+
+    return no_update, no_update
+
+
+@ app.callback(
+    Output("sensor_label", "value"),
+    Output("samples", "value"),
+    Output("rate", "value"),
+    Input("selectedSensor", "value"),
+    Input("cancel_sensors", "n_clicks")
 )
-def handleSensors(selectedSensor, n_clicks):
-    ctx = callback_context
-    caller = ctx.triggered[0]['prop_id'].split('.')[0]
-    if caller == 'selectedSensor':
-        if selectedSensor is not None:
-            selectedSensor = selectedSensor.split(",")
-            secondsBetweenSamples = int(selectedSensor[4])
-            for rate in rates:
-                samplesPerRate = rate_mapping[rate] / secondsBetweenSamples
-                if (samplesPerRate.is_integer()):
-                    return no_update, selectedSensor[2], samplesPerRate, rate, 0
-            return no_update, selectedSensor[2], -1, rates[0], 0
-    else:
-        return None, '',  0, None, 0
+def load_sensor_config(selected_sensor, n_clicks):
+    """Load the current config for the selected sensor from the DB."""
+    caller = callback_context.triggered[0]["prop_id"]
+    if caller == "selectedSensor.value" and selected_sensor:
+        with engine.connect() as conn:
+            result = conn.execute(
+                select(sensor_table)
+                .where(sensor_table.c.id == selected_sensor)
+            ).fetchone()
+        id, type, name, unit, sample_gap = result
+
+        for unit, unit_length in rate_mapping.items():
+            unit_amount = unit_length / sample_gap
+            if unit_amount.is_integer():
+                return name, unit_amount, unit
+    return None, "",  0
 
 
-@app.callback(
-    Output('sensors_out', 'children'),
-    Input('save_sensors', 'n_clicks'),
-    State('selectedSensor', 'value'),
-    State('sensor_label', 'value'),
-    State('samples', 'value'),
-    State('rate', 'value')
+@ app.callback(
+    Output("sensors_out", "children"),
+    Output("selectedSensor", "options"),
+    Input("save_sensors", "n_clicks"),
+    State("selectedSensor", "value"),
+    State("sensor_label", "value"),
+    State("samples", "value"),
+    State("rate", "value")
 )
-def saveSensors(n_clicks, selectedSensor, sensor_label, samples, rate):
-    # TODO Autofill
+def saveSensors(n_clicks, sensor_id, name, unit_amount, time_unit):
     if (n_clicks > 0):
-        if samples < 0:
-            return html.H5("Invalid samples (>0)", id="sensors_out_text")
-        time_between_samples = int(rate_mapping[rate] / samples)
-        selectedSensor = selectedSensor.split(",")
-        publish.single(topic=f"sensors/config", payload=json.dumps({"id":selectedSensor[0], "type":selectedSensor[1], "name":sensor_label, "unit":selectedSensor[3], "sample_gap":time_between_samples}),
-            qos=2, retain=True, hostname=sys.argv[1], port=1883)
-        getDBData()
-        return html.H5("Sensors saved", id="sensors_out_text")
-    return None
+        with engine.connect() as conn:
+
+            sample_gap = rate_mapping[time_unit] / unit_amount
+
+            # Load old sensor info because not all is known by frontend
+            result = conn.execute(
+                select(sensor_table.c.type, sensor_table.c.unit)
+                .where(sensor_table.c.id == sensor_id)
+            ).fetchone()
+            type, unit = result
+            payload = {
+                "id": int(sensor_id),
+                "type": type,
+                "name": name,
+                "unit": unit,
+                "sample_gap": sample_gap
+            }
+            publish.single(f"sensors/config", payload=json.dumps(payload), qos=2,
+                           hostname=sys.argv[1], port=1883)
+
+            mqtt_logger.info(
+                f"Published to /sensors/config: {json.dumps(payload, indent=4)}")
+
+            # Wait for the plant to be updated
+            time.sleep(1)
+
+            return html.H5("Sensor saved", id="sensors_out"), get_all_sensors()
+    return no_update, no_update
