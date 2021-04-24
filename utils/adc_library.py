@@ -6,6 +6,7 @@
 # modification: 2020/04/21
 ########################################################################
 
+import time
 import smbus
 
 class ADCDevice(object):
@@ -34,5 +35,9 @@ class ADS7830(ADCDevice):
         self.address = 0x4b # 0x4b is the default i2c address for ADS7830 Module.   
         
     def analogRead(self, chn): # ADS7830 has 8 ADC input pins, chn:0,1,2,3,4,5,6,7
-        value = self.bus.read_byte_data(self.address, self.cmd|(((chn<<2 | chn>>1)&0x07)<<4))
+        try:
+            value = self.bus.read_byte_data(self.address, self.cmd|(((chn<<2 | chn>>1)&0x07)<<4))
+        except:
+            time.sleep(.5)
+            return self.analogRead(chn)
         return value
