@@ -1,6 +1,6 @@
 """Utility class that standarizes interaction with different sensors."""
-from datetime import datetime as dt
 import time
+from datetime import datetime as dt
 
 import adafruit_dht
 
@@ -13,7 +13,7 @@ class generic_sensor():
         self.id = id
         self.unit = unit
         self.sample_gap = sample_gap
-        self.last_sample = dt(1, 1, 1)
+        self.last_sample = dt.now()
 
     def sample(self):
         """Return a sample of data."""

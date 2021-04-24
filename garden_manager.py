@@ -5,18 +5,18 @@ well as the automation of watering events.
 
 """
 import json
-from datetime import datetime as dt
 import logging
-import colorama
-from colorama.ansi import Fore
+from datetime import datetime as dt
 
+import colorama
 import paho.mqtt.client as mqtt
+from colorama.ansi import Fore
 from sqlalchemy import MetaData, create_engine, select
-from sqlalchemy.engine.base import NestedTransaction
 from sqlalchemy.sql.schema import Table
 
-from utils.common import get_broker_ip, parse_json_payload, connection_message
-from utils.db_interaction import create_db, create_sensor, create_sample, create_plant, create_watering_event
+from utils.common import connection_message, get_broker_ip, parse_json_payload
+from utils.db_interaction import (create_db, create_plant, create_sample,
+                                  create_sensor, create_watering_event)
 
 # DB objects
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)

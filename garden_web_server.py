@@ -1,13 +1,15 @@
+import sys
+
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
-import sys
+from sqlalchemy import Table, create_engine, select
+from sqlalchemy.sql.schema import MetaData
+
 from app import app
 from apps import configuration, controls, history, overview
 from utils.db_interaction import create_plant
-from sqlalchemy import create_engine, text, Table, desc, select
-from sqlalchemy.sql.schema import MetaData
 
 # Setup database interaction
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)

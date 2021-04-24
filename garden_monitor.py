@@ -2,13 +2,15 @@
 import json
 import logging
 import sys
+import threading
 import time
 from datetime import datetime as dt
 
 import board
-from gpiozero.output_devices import OutputDevice
+import colorama
 import paho.mqtt.client as mqtt
-from gpiozero import GPIODevice
+from colorama.ansi import Fore
+from gpiozero.output_devices import OutputDevice
 
 from utils.adc_library import ADS7830
 from utils.common import connection_message, get_broker_ip, parse_json_payload
@@ -33,19 +35,25 @@ adc = ADS7830()
 # Object used to control access to the dht-22 sensor
 dht_22 = dht_22(board.D17)
 
-# create the default logger
-sample_logger = logging.getLogger("\u001b[32msample_log")
-mqtt_logger = logging.getLogger("\u001b[35mmqtt_log")
-config_logger = logging.getLogger("\u001b[34mconfig_log")
+# Init color engine
+colorama.init()
+
+# Logging setup
+sample_logger = logging.getLogger(Fore.GREEN + "sample_log")
+mqtt_logger = logging.getLogger(Fore.MAGENTA + "mqtt_log")
+config_logger = logging.getLogger(Fore.WHITE + "config_log")
+pump_logger = logging.getLogger(Fore.BLUE + "pump_log")
 
 logging.basicConfig(
-    level="INFO", format="\u001b[36m%(asctime)s \u001b[0m%(name)s \u001b[33m%(levelname)s \u001b[0m%(message)s")
+    level="INFO", format=f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
 
 # Register pumps on GPIO pins
 pump1 = OutputDevice("GPIO26", active_high=False)
 pump2 = OutputDevice("GPIO19", active_high=False)
 pump3 = OutputDevice("GPIO13", active_high=False)
 pump4 = OutputDevice("GPIO6", active_high=False)
+
+pump_lock = threading.Lock()
 
 # Map pump ids to their pump objects
 pump_mapping = {
@@ -103,6 +111,29 @@ def build_sensors():
             f"Created {sensor['type']} sensor with id: {sensor['id']}")
 
 
+def activate_pump(pump_id, duration, lock):
+    """Activate pump for a specified amount of time, ensuring that only one pump runs at a time.
+
+    Parameters
+    ----------
+    pump : int
+        ID of the pump to activate.
+
+    duration : int
+        Number of seconds to run the pump.
+
+    lock : threading.Lock()
+        Lock primitive to prevent pumps running concurrently which may draw too much current.
+    """
+    pump = pump_mapping[pump_id]
+    with lock:
+        pump_logger.info(f"Pump {pump_id} activated")
+        pump.on()
+        time.sleep(duration)
+        pump.off()
+        pump_logger.info(f"Pump {pump_id} deactivated")
+
+
 def sample_routine():
     """Run the main routines of the program.
 
@@ -117,8 +148,8 @@ def sample_routine():
                 "value": value,
                 "timestamp": timestamp.isoformat()
             }
-            client.publish(
-                f"sensors/data/{id}", payload=json.dumps(payload), qos=2)
+            client.publish(f'sensors/data/{id}',
+                           payload=json.dumps(payload), qos=2)
             sample_logger.info(
                 f"Published {value}{sensor.unit} for sensor_id {id}")
 
@@ -135,12 +166,10 @@ def handle_pumps_control(client, userdata, msg):
         f"Pump instruction received: {json.dumps(data, indent=4)}")
 
     pump_id = msg.topic.split("/")[-1]
-    pump = pump_mapping[pump_id]
-    start_time = dt.now()
-    pump.on()
-    while ((dt.now() - start_time).total_seconds() < data["duration"]):
-        pass
-    pump.off()
+
+    new_thread = threading.Thread(target=activate_pump, args=(
+        pump_id, data["duration"], pump_lock))
+    new_thread.start()
 
 
 def handle_sensor_info(client, userdata, msg):
