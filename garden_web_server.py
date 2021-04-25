@@ -34,8 +34,7 @@ app.layout = html.Div([
     navbar,
     dcc.Location(id='url', refresh=False),
     html.Div(id='page-content', className="container")
-]
-)
+])
 
 
 @app.callback(Output('page-content', 'children'),
