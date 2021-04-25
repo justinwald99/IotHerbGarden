@@ -58,7 +58,7 @@
         "type": "light",
         "name": "ambient_light",
         "unit": "%",
-        "sample_gap": 1,
+        "sample_gap": 15,
         "adc_index": 4,
         "light_value": 255,
         "dark_value": 20

@@ -1,21 +1,16 @@
 import datetime as dt
-import json
 
 import re
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from numpy import tri
 import pandas as pd
 import plotly.graph_objects as go
-from sqlalchemy.sql.expression import false
 from app import app
 from dash.dependencies import Input, Output
-from dash.exceptions import PreventUpdate
 from sqlalchemy import Table, create_engine, select
 from sqlalchemy.sql.elements import between
 from sqlalchemy.sql.schema import MetaData
-import itertools
 
 engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
 metadata = MetaData()
