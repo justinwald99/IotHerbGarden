@@ -46,7 +46,7 @@ Next, assemble the hardware following the schematic in `docs/iot_herb_garden_sch
 
 Three programs must be run to operate the IoT_Herb_Garden system: `garden_manager.py`, `garden_monitor.py`, and `garden_web_server.py`, as well as the MQTT broker.
 
-When running the system, `garden_monitor.py` must be run on the Raspberry Pi. We recommended that `garden_manager.py` and `garden_web_server.py` be run on a separate computer to increase performance, but they can be run from the Pi if you chose.
+When running the system, `garden_monitor.py` must be run on the Raspberry Pi. We recommended that `garden_manager.py` and `garden_web_server.py` be run on a separate computer to increase performance, but they can be run from the Pi if you chose (note that both manager and web server must be run on the same machine due to requiring direct database access).
 
 To start the system, first start the MQTT server. If using mosquittor, run the following command from the mosquitto directory:
 ```
