@@ -255,16 +255,9 @@ layout = [
                                     ]),
                                     dcc.Graph(id='plant4_graph', figure=px.line(pd.DataFrame({'timestamp': [
                                               1, 2, 3, 4], 'humidity':[2, 3, 4, 5]}), x='timestamp', y='humidity', width=450, height=300))
-                                ], className="col m-3 border"
-                            ),
-                        ],
-                        className="row"
-                    )
-                ],
-                className="card-body"
-            )
-        ],
-        className="card m-2"
+                                ], className="col m-3 border"),
+                        ], className="row")
+                ], className="card-body")
+        ], className="card my-2"
     )
-
 ]
