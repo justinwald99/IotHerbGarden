@@ -256,7 +256,8 @@ def draw_graph(ambient_options, plant_options, fields, relay_out_data):
 
     fig.add_traces(get_ambient_traces(ambient_options))
     fig.add_traces(get_plant_traces(plant_options, fields))
-    add_watering_events(plant_options, fig)
+    if ("pump_activated" in fields):
+        add_watering_events(plant_options, fig)
 
     return fig
 
