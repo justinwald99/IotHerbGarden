@@ -1,26 +1,16 @@
-import sys
-
+"""Entry point for the garden web server."""
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+import paho.mqtt.client as mqtt
 from dash.dependencies import Input, Output
-from sqlalchemy import Table, create_engine, select
-from sqlalchemy.sql.schema import MetaData
-from utils.common import get_broker_ip
 
 from app import app
 from apps import configuration, controls, history, overview
-from utils.db_interaction import create_plant
-import paho.mqtt.client as mqtt
+from utils.common import get_broker_ip
 
-# Setup database interaction
-engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
-metadata = MetaData()
-plant_table = Table("plant", metadata, autoload_with=engine)
-sensor_table = Table("sensor", metadata, autoload_with=engine)
-
+# MQTT client
 client = mqtt.Client("garden_web_server")
-broker_ip = ""
 
 # Global status vars
 monitor_online = False
@@ -114,50 +104,6 @@ def mqtt_record_status(client, userdata, msg):
         monitor_online = msg.payload.decode() == "online"
 
 
-def check_plants():
-    """Check that every soil_humidity sensor has a plant associated with it.
-
-    If there exists a soil_humidity sensor that does not have a plant associated,
-    create a new plant with default values in the DB.
-    """
-    with engine.connect() as conn:
-        plant_ids = conn.execute(
-            select(plant_table.c.id)
-        ).fetchall()
-        # Convert list of tuples into list of ids.
-        plant_ids = [id for id, in plant_ids]
-
-        associated_sensor_ids = conn.execute(
-            select(plant_table.c.humidity_sensor_id)
-        ).fetchall()
-        associated_sensor_ids = [id for id, in associated_sensor_ids]
-
-        humidity_sensors = conn.execute(
-            select(sensor_table.c.id).where(
-                sensor_table.c.type == 'soil_humidity')
-        ).fetchall()
-        humidity_sensors = [id for id, in humidity_sensors]
-
-        # now we have all plants and soil humidity sensors
-        for humidity_sensor_id in humidity_sensors:
-            # Create plants for every humidity sensor
-            if humidity_sensor_id not in associated_sensor_ids:
-                # Plant with default values
-                create_plant(engine, metadata, {
-                    # plant_ids is combined with single-element list to prevent max([])
-                    "name": f"plant_{max(plant_ids + [0]) + 1}",
-                    "humidity_sensor_id": humidity_sensor_id,
-                    "pump_id": max(plant_ids + [0]) + 1,
-                    "target": 50,
-                    "watering_cooldown": 300,
-                    "watering_duration": 1,
-                    "humidity_tolerance": 5
-                })
-                # Recursive call so we don't have to keep track of generated ids
-                check_plants()
-                return
-
-
 if __name__ == '__main__':
     broker_ip = get_broker_ip(__file__)
 
@@ -165,7 +111,5 @@ if __name__ == '__main__':
     client.connect(broker_ip)
     client.subscribe("status/+", qos=2)
     client.loop()
-
-    check_plants()
 
     app.run_server(debug=True, port=8050, host="0.0.0.0")

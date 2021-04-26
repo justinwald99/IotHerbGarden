@@ -1,6 +1,6 @@
 import datetime as dt
-
 import re
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -8,16 +8,9 @@ import pandas as pd
 import plotly.graph_objects as go
 from app import app
 from dash.dependencies import Input, Output
-from sqlalchemy import Table, create_engine, select
-from sqlalchemy.sql.elements import between
-from sqlalchemy.sql.schema import MetaData
-
-engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
-metadata = MetaData()
-sample_table = Table("sample", metadata, autoload_with=engine)
-sensor_table = Table("sensor", metadata, autoload_with=engine)
-plant_table = Table("plant", metadata, autoload_with=engine)
-watering_table = Table("watering_event", metadata, autoload_with=engine)
+from sqlalchemy import between, select
+from utils.db_interaction import (engine, plant_table, sample_table,
+                                  sensor_table, watering_table)
 
 history_graph = go.Figure()
 
