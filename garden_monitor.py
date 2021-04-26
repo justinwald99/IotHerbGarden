@@ -141,11 +141,6 @@ def sample_routine():
                 f"Published {value}{sensor.unit} for sensor_id {id}")
 
 
-def on_connect(client, obj, flags, rc):
-    """Print a message when connected to the MQTT broker."""
-    mqtt_logger.info(connection_message(broker_ip, rc))
-
-
 def handle_pumps_control(client, userdata, msg):
     """Activate a specified pump when a message is received on pumps/control/{id}."""
     data = parse_json_payload(msg)
@@ -198,8 +193,9 @@ def handle_sensor_info(client, userdata, msg):
     build_sensors()
 
 
-def publish_status():
+def publish_status(client, obj, flags, rc):
     """Publish the status of garden_monitor."""
+    mqtt_logger.info(connection_message(broker_ip, rc))
     client.publish("status/garden_monitor",
                    payload="online", qos=2, retain=True)
     mqtt_logger.info("Status published")
@@ -222,7 +218,7 @@ if __name__ == '__main__':
                     payload="offline", qos=2, retain=True)
 
     # Set callback methods
-    client.on_connect = on_connect
+    client.on_connect = publish_status
     client.message_callback_add("pumps/control/#", handle_pumps_control)
     client.message_callback_add("sensors/info", handle_sensor_info)
 

@@ -1,12 +1,13 @@
 import json
+import sys
 
 import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+import paho.mqtt.publish as publish
 from app import app
 from dash.dependencies import Input, Output, State
-from garden_manager import client
 
 pumps = ["pump1", "pump2", "pump3", "pump4"]
 
@@ -65,24 +66,24 @@ def clear_form(n_clicks):
 def perform_pump(n_clicks, pump1, pump2, pump3, pump4):
     if n_clicks:
         if pump1:
-            client.publish(
+            publish.single(
                 "pumps/control/1",
                 payload=json.dumps({"duration": pump1}),
-                qos=2)
+                qos=2, hostname=sys.argv[1])
         if pump2:
-            client.publish(
+            publish.single(
                 "pumps/control/2",
                 payload=json.dumps({"duration": pump2}),
-                qos=2)
+                qos=2, hostname=sys.argv[1])
         if pump3:
-            client.publish(
+            publish.single(
                 "pumps/control/3",
                 payload=json.dumps({"duration": pump3}),
-                qos=2)
+                qos=2, hostname=sys.argv[1])
         if pump4:
-            client.publish(
+            publish.single(
                 "pumps/control/4",
                 payload=json.dumps({"duration": pump4}),
-                qos=2)
+                qos=2, hostname=sys.argv[1])
         return "Performing manual pump.."
     return dash.no_update

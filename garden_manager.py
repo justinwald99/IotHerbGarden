@@ -116,11 +116,6 @@ def check_watering(msg):
                 f"pumps/control/{pump_id}", payload=json.dumps(payload), qos=2)
 
 
-def on_connect(client, userdata, flags, rc):
-    """Print when the MQTT broker accepts the connection."""
-    mqtt_logger.info(connection_message(broker_ip, rc))
-
-
 def handle_pumps_control(client, userdata, msg):
     """Log a watering event in the database."""
     payload = parse_json_payload(msg)
@@ -191,8 +186,9 @@ def handle_sensors_data(client, userdata, msg):
         check_watering(payload)
 
 
-def publish_status():
+def publish_status(client, userdata, flags, rc):
     """Publish the status of garden_manager."""
+    mqtt_logger.info(connection_message(broker_ip, rc))
     client.publish("status/garden_manager",
                    payload="online", qos=2, retain=True)
     mqtt_logger.info("Published status")
@@ -227,7 +223,7 @@ if (__name__ == "__main__"):
     client.message_callback_add("sensors/config", handle_sensors_config)
     client.message_callback_add("sensors/data/+", handle_sensors_data)
     client.message_callback_add("pumps/control/+", handle_pumps_control)
-    client.on_connect = on_connect
+    client.on_connect = publish_status
 
     # Create the last will for garden_manager
     client.will_set("status/garden_manager",
@@ -243,8 +239,6 @@ if (__name__ == "__main__"):
         ("sensors/data/+", 2),
         ("pumps/control/+", 2)
     ])
-
-    publish_status()
 
     publish_sensor_info()
 

@@ -11,6 +11,7 @@ from utils.common import get_broker_ip
 
 # MQTT client
 client = mqtt.Client("garden_web_server")
+broker_ip = ""
 
 # Global status vars
 monitor_online = False
@@ -84,7 +85,6 @@ def display_page(pathname):
               Input("app_interval", "n_intervals"))
 def update_status(n_intervals):
     """Update the status of the manager and monitor scripts."""
-    client.loop()
     manager_status_text = "online" if manager_online else "offline"
     manager_status_pill = "success" if manager_online else "danger"
     monitor_status_text = "online" if monitor_online else "offline"
@@ -106,10 +106,9 @@ def mqtt_record_status(client, userdata, msg):
 
 if __name__ == '__main__':
     broker_ip = get_broker_ip(__file__)
-
-    client.message_callback_add("status/+", mqtt_record_status)
     client.connect(broker_ip)
+    client.loop_start()
+    client.message_callback_add("status/+", mqtt_record_status)
     client.subscribe("status/+", qos=2)
-    client.loop()
 
-    app.run_server(debug=True, port=8050, host="0.0.0.0")
+    app.run_server(port=8050, host="0.0.0.0")
