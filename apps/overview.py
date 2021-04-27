@@ -48,8 +48,9 @@ def update_page(n_intervals):
     sample_table = Table("sample", metadata, autoload_with=engine)
     sensor_table = Table("sensor", metadata, autoload_with=engine)
     plant_table = Table("plant", metadata, autoload_with=engine)
+    watering_event_table = Table("watering_event", metadata, autoload_with=engine)
     error = 0
-    humidity_result, temp_result, light_result, plant_graphs, plant_misc = (None, None, None, None, None)
+    humidity_result, temp_result, light_result, plant_graphs, plant_misc, plant_lastwatered = (None, None, None, None, None, None)
     with engine.connect() as conn:
         try:
             # get current ambient humidity
@@ -70,11 +71,16 @@ def update_page(n_intervals):
                 select([plant_table.c.name, plant_table.c.target, plant_table.c.id])
             ).fetchall() # id is plant_misc[i][2]
             plant_graphs = []
+            plant_lastwatered = []
             for plant in plant_misc:
-                plant_graph_result = conn.execute(
+                plant_graphs.append(conn.execute(
                     select([sample_table.c.timestamp, sample_table.c.value]).where(plant_table.c.id == plant[2], sample_table.c.sensor_id == plant_table.c.humidity_sensor_id).limit(25).order_by(desc(sample_table.c.timestamp))
-                ).fetchall()
-                plant_graphs.append(plant_graph_result)
+                ).fetchall())
+                plant_lastwatered.append(conn.execute(
+                    select([watering_event_table.c.timestamp]).where(watering_event_table.c.plant_id == plant[2]).limit(1).order_by(desc(watering_event_table.c.timestamp))
+                ).fetchall())
+
+
             # plant_graphs is the list of all plant graphs.
             # plantgraphs[i] is the graph for the i'th plant
             # plantgraphs[i][j] is the j'th datapoint for the i'th plant
@@ -83,7 +89,7 @@ def update_page(n_intervals):
         except Exception as e:
             print(e)
             error = 1
-    if error == 1 or None in [humidity_result, temp_result, light_result, plant_graphs, plant_misc]: # pass test values if there was an error
+    if error == 1 or None in [humidity_result, temp_result, light_result, plant_graphs, plant_misc, plant_lastwatered]: # pass test values if there was an error
         print("Error occurred collecting DB data, passing test values")
         return [make_gauge("Temperature", 50, "° F", [0, 100], "#dc3545"), make_gauge("Relative Humidity", 50, "%", [0, 100], "#17a2b8"),
          px.line(pd.DataFrame({'timestamp':[1,2,3,4],'sunlight':[2,3,4,5]}), x='timestamp', y='sunlight', title='Test Input', width=525, height=250),
@@ -112,7 +118,7 @@ def update_page(n_intervals):
      # plant humidity targets
      plant_misc[0][1], plant_misc[1][1], plant_misc[2][1], plant_misc[3][1],
      # plant_lastwatered, ith plant, most recent entry (0th), 0th value (timestamp)
-     plant_graphs[0][0][0], plant_graphs[1][0][0], plant_graphs[2][0][0], plant_graphs[3][0][0]]
+     plant_lastwatered[0][0][0], plant_lastwatered[1][0][0], plant_lastwatered[2][0][0], plant_lastwatered[3][0][0]]
 
 
 layout = [
