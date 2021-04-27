@@ -1,25 +1,17 @@
 import json
-import logging
 import sys
 import time
 
-import colorama
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
 import paho.mqtt.publish as publish
 from app import app
-from colorama import Fore
 from dash import callback_context, no_update
 from dash.dependencies import Input, Output, State
-from sqlalchemy import MetaData, Table, create_engine, select
-
-# DB objects
-engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
-metadata = MetaData()
-plant_table = Table("plant", metadata, autoload_with=engine)
-sensor_table = Table("sensor", metadata, autoload_with=engine)
-
+from sqlalchemy import select
+from utils.db_interaction import engine, plant_table, sensor_table
+from utils.logging import mqtt_logger
 
 pump_list = [
     (1, "pump_1"),
@@ -35,15 +27,6 @@ rate_mapping = {
     "minute": 60,
     "hour": 3600
 }
-
-# Init color engine
-colorama.init()
-
-# Logging setup
-mqtt_logger = logging.getLogger(Fore.MAGENTA + "mqtt_log")
-
-logging.basicConfig(
-    level="INFO", format=f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
 
 
 def get_plant_ids():
@@ -255,8 +238,9 @@ def savePlants(n_clicks, selectedPlant, name, humidity_sensor_id, pump_id, targe
             "watering_duration": watering_duration,
             "humidity_tolerance": humidity_tolerance
         }
-        publish.single(f"plants/config", payload=json.dumps(payload), qos=2,
-                       hostname=sys.argv[1], port=1883)
+        publish.single(f"plants/config",
+                       payload=json.dumps(payload), qos=2,
+                       hostname=sys.argv[1])
 
         mqtt_logger.info(
             f"Published to /plants/config: {json.dumps(payload, indent=4)}")
@@ -320,10 +304,10 @@ def saveSensors(n_clicks, sensor_id, name, unit_amount, time_unit):
                 "type": type,
                 "name": name,
                 "unit": unit,
-                "sample_gap": sample_gap
+                "sample_gap": int(sample_gap)
             }
-            publish.single(f"sensors/config", payload=json.dumps(payload), qos=2,
-                           hostname=sys.argv[1], port=1883)
+            publish.single(f"sensors/config",
+                           payload=json.dumps(payload), qos=2, hostname=sys.argv[1])
 
             mqtt_logger.info(
                 f"Published to /sensors/config: {json.dumps(payload, indent=4)}")

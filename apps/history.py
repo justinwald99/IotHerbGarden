@@ -1,28 +1,16 @@
 import datetime as dt
-import json
-
 import re
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from numpy import tri
 import pandas as pd
 import plotly.graph_objects as go
-from sqlalchemy.sql.expression import false
 from app import app
 from dash.dependencies import Input, Output
-from dash.exceptions import PreventUpdate
-from sqlalchemy import Table, create_engine, select
-from sqlalchemy.sql.elements import between
-from sqlalchemy.sql.schema import MetaData
-import itertools
-
-engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
-metadata = MetaData()
-sample_table = Table("sample", metadata, autoload_with=engine)
-sensor_table = Table("sensor", metadata, autoload_with=engine)
-plant_table = Table("plant", metadata, autoload_with=engine)
-watering_table = Table("watering_event", metadata, autoload_with=engine)
+from sqlalchemy import between, select
+from utils.db_interaction import (engine, plant_table, sample_table,
+                                  sensor_table, watering_table)
 
 history_graph = go.Figure()
 
@@ -268,7 +256,8 @@ def draw_graph(ambient_options, plant_options, fields, relay_out_data):
 
     fig.add_traces(get_ambient_traces(ambient_options))
     fig.add_traces(get_plant_traces(plant_options, fields))
-    add_watering_events(plant_options, fig)
+    if ("pump_activated" in fields):
+        add_watering_events(plant_options, fig)
 
     return fig
 

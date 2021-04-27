@@ -1,7 +1,7 @@
 import json
 import sys
-import dash
 
+import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
@@ -69,33 +69,21 @@ def perform_pump(n_clicks, pump1, pump2, pump3, pump4):
             publish.single(
                 "pumps/control/1",
                 payload=json.dumps({"duration": pump1}),
-                qos=2,
-                retain=False,
-                hostname=sys.argv[1],  # TODO: Change hostname to be accurate
-                port=1883)
+                qos=2, hostname=sys.argv[1])
         if pump2:
             publish.single(
                 "pumps/control/2",
                 payload=json.dumps({"duration": pump2}),
-                qos=2,
-                retain=False,
-                hostname=sys.argv[1],  # TODO: Change hostname to be accurate
-                port=1883)
+                qos=2, hostname=sys.argv[1])
         if pump3:
             publish.single(
                 "pumps/control/3",
                 payload=json.dumps({"duration": pump3}),
-                qos=2,
-                retain=False,
-                hostname=sys.argv[1],  # TODO: Change hostname to be accurate
-                port=1883)
+                qos=2, hostname=sys.argv[1])
         if pump4:
             publish.single(
                 "pumps/control/4",
                 payload=json.dumps({"duration": pump4}),
-                qos=2,
-                retain=False,
-                hostname=sys.argv[1],  # TODO: Change hostname to be accurate
-                port=1883)
+                qos=2, hostname=sys.argv[1])
         return "Performing manual pump.."
     return dash.no_update

@@ -5,22 +5,19 @@ well as the automation of watering events.
 
 """
 import json
-import logging
 from datetime import datetime as dt
 
-import colorama
 import paho.mqtt.client as mqtt
-from colorama.ansi import Fore
-from sqlalchemy import MetaData, create_engine, select
-from sqlalchemy.sql.schema import Table
+from sqlalchemy import select
 
 from utils.common import connection_message, get_broker_ip, parse_json_payload
-from utils.db_interaction import (create_db, create_plant, create_sample,
-                                  create_sensor, create_watering_event)
+from utils.db_interaction import (create_plant, create_sample, create_sensor,
+                                  create_watering_event, engine, initialize_db,
+                                  plant_table, sensor_table, watering_table)
+from utils.logging import mqtt_logger, sample_logger
 
-# DB objects
-engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
-metadata = MetaData()
+# Create all of the schema objects in the database and create the engine.
+initialize_db()
 
 # IP for the MQTT broker
 broker_ip = ""
@@ -28,16 +25,49 @@ broker_ip = ""
 # Create an MQTT client object
 client = mqtt.Client("garden_manager")
 
-# Init color engine
-colorama.init()
 
-# Logging setup
-sample_logger = logging.getLogger(Fore.GREEN + "sample_log")
-mqtt_logger = logging.getLogger(Fore.MAGENTA + "mqtt_log")
-config_logger = logging.getLogger(Fore.BLUE + "config_log")
+def check_plants():
+    """Check that every soil_humidity sensor has a plant associated with it.
 
-logging.basicConfig(
-    level="INFO", format=f"{Fore.CYAN}%(asctime)s {Fore.RESET}%(name)s {Fore.YELLOW}%(levelname)s {Fore.RESET}%(message)s")
+    If there exists a soil_humidity sensor that does not have a plant associated,
+    create a new plant with default values in the DB.
+    """
+    with engine.connect() as conn:
+        plant_ids = conn.execute(
+            select(plant_table.c.id)
+        ).fetchall()
+        # Convert list of tuples into list of ids.
+        plant_ids = [id for id, in plant_ids]
+
+        associated_sensor_ids = conn.execute(
+            select(plant_table.c.humidity_sensor_id)
+        ).fetchall()
+        associated_sensor_ids = [id for id, in associated_sensor_ids]
+
+        humidity_sensors = conn.execute(
+            select(sensor_table.c.id).where(
+                sensor_table.c.type == 'soil_humidity')
+        ).fetchall()
+        humidity_sensors = [id for id, in humidity_sensors]
+
+        # now we have all plants and soil humidity sensors
+        for humidity_sensor_id in humidity_sensors:
+            # Create plants for every humidity sensor
+            if humidity_sensor_id not in associated_sensor_ids:
+                # Plant with default values
+                create_plant({
+                    # plant_ids is combined with single-element list to prevent max([])
+                    "name": f"plant_{max(plant_ids + [0]) + 1}",
+                    "humidity_sensor_id": humidity_sensor_id,
+                    "pump_id": max(plant_ids + [0]) + 1,
+                    "target": 50,
+                    "watering_cooldown": 300,
+                    "watering_duration": 1,
+                    "humidity_tolerance": 5
+                })
+                # Recursive call so we don't have to keep track of generated ids
+                check_plants()
+                return
 
 
 def check_watering(msg):
@@ -54,14 +84,15 @@ def check_watering(msg):
                     value: <value>
                 }
     """
-    plant_table = Table("plant", metadata, autoload_from=engine)
-    watering_table = Table("watering_event", metadata, autoload_with=engine)
+    # Ensure that all humidity_sensors have an associated plant object.
+    check_plants()
+
     # Select data on the plant for the given soil_humidity sensor_id
     with engine.connect() as conn:
         plant_info = conn.execute(
             select(plant_table).
             where(plant_table.c.humidity_sensor_id == msg["sensor_id"])
-        ).fetchone()
+        ).first()
 
     id, name, hum_sensor_id, pump_id, target, cooldown, duration, tolerance = plant_info
 
@@ -85,14 +116,8 @@ def check_watering(msg):
                 f"pumps/control/{pump_id}", payload=json.dumps(payload), qos=2)
 
 
-def on_connect(client, userdata, flags, rc):
-    """Print when the MQTT broker accepts the connection."""
-    mqtt_logger.info(connection_message(broker_ip, rc))
-
-
 def handle_pumps_control(client, userdata, msg):
     """Log a watering event in the database."""
-    plant_table = Table("plant", metadata, autoload_with=engine)
     payload = parse_json_payload(msg)
     mqtt_logger.info(
         f"Received pump event for pump_id {msg.topic.split('/')[-1]}: {json.dumps(payload, indent=4)}")
@@ -110,14 +135,14 @@ def handle_pumps_control(client, userdata, msg):
             "plant_id": plant_id
         }
     )
-    create_watering_event(engine, metadata, payload)
+    create_watering_event(payload)
 
 
 def handle_plants_config(client, userdata, msg):
     """Update the DB to save plant configs."""
     payload = parse_json_payload(msg)
     mqtt_logger.info(f"Received plant config: {json.dumps(payload, indent=4)}")
-    create_plant(engine, metadata, payload)
+    create_plant(payload)
 
 
 def handle_sensors_config(client, userdata, msg):
@@ -131,13 +156,12 @@ def handle_sensors_config(client, userdata, msg):
             "sample_gap": int(payload["sample_gap"])
         }
     )
-    create_sensor(engine, metadata, payload)
+    create_sensor(payload)
     publish_sensor_info()
 
 
 def handle_sensors_data(client, userdata, msg):
     """Log received data into the DB as a new data sample."""
-    sensor_table = Table("sensor", metadata, autoload_with=engine)
     payload = parse_json_payload(msg)
     sample_logger.info(
         f"Received {payload['value']} from sensor_id {msg.topic.split('/')[-1]}")
@@ -149,7 +173,7 @@ def handle_sensors_data(client, userdata, msg):
         }
     )
 
-    create_sample(engine, metadata, payload)
+    create_sample(payload)
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -162,8 +186,9 @@ def handle_sensors_data(client, userdata, msg):
         check_watering(payload)
 
 
-def publish_status():
+def publish_status(client, userdata, flags, rc):
     """Publish the status of garden_manager."""
+    mqtt_logger.info(connection_message(broker_ip, rc))
     client.publish("status/garden_manager",
                    payload="online", qos=2, retain=True)
     mqtt_logger.info("Published status")
@@ -171,17 +196,17 @@ def publish_status():
 
 def publish_sensor_info():
     """Publish the current sensor info."""
-    sensor_table = Table("sensor", metadata, autoload_with=engine)
     with engine.connect() as conn:
         result = conn.execute(select(sensor_table))
         info = []
         for row in result:
+            id, type, name, unit, sample_gap = row
             info.append({
-                "id": row[0],
-                "type": row[1],
-                "name": row[2],
-                "unit": row[3],
-                "sample_gap": row[4]
+                "id": id,
+                "type": type,
+                "name": name,
+                "unit": unit,
+                "sample_gap": sample_gap
             })
     client.publish("sensors/info", payload=json.dumps(info),
                    qos=2, retain=True)
@@ -193,15 +218,12 @@ if (__name__ == "__main__"):
     # Ensure that the client provided an IP for the MQTT broker
     broker_ip = get_broker_ip(__file__)
 
-    # Create the tables needed if neccesary
-    create_db(engine, metadata)
-
     # Add callbacks to the client
     client.message_callback_add("plants/config", handle_plants_config)
     client.message_callback_add("sensors/config", handle_sensors_config)
     client.message_callback_add("sensors/data/+", handle_sensors_data)
     client.message_callback_add("pumps/control/+", handle_pumps_control)
-    client.on_connect = on_connect
+    client.on_connect = publish_status
 
     # Create the last will for garden_manager
     client.will_set("status/garden_manager",
@@ -217,8 +239,6 @@ if (__name__ == "__main__"):
         ("sensors/data/+", 2),
         ("pumps/control/+", 2)
     ])
-
-    publish_status()
 
     publish_sensor_info()
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Monitoring service for IoT Herb Garden.
+After=network.target
+
+[Service]
+ExecStart=/home/pi/iot_herb_garden/venv/bin/python -u garden_monitor.py 192.168.1.157
+WorkingDirectory=/home/pi/iot_herb_garden
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
