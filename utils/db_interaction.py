@@ -2,10 +2,11 @@
 
 from sqlalchemy import (TIMESTAMP, Column, ForeignKey, Integer, MetaData,
                         String, Table, create_engine)
-from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.dialects.mysql import insert
 
 # Engine used to interface the db
-engine = create_engine("sqlite+pysqlite:///garden.db", future=True)
+engine = create_engine(
+    "mysql://garden.manager:IAmGardenManager@192.168.1.232:3306/garden_db", future=True)
 
 # Metadata that keeps track of db schema
 metadata = MetaData()
@@ -15,9 +16,9 @@ sensor_table = Table(
     "sensor",
     metadata,
     Column("id", Integer, primary_key=True),
-    Column("type", String, nullable=False),
-    Column("name", String, nullable=False),
-    Column("unit", String, nullable=False),
+    Column("type", String(length=64), nullable=False),
+    Column("name", String(length=64), nullable=False),
+    Column("unit", String(length=64), nullable=False),
     Column("sample_gap", Integer, nullable=False)
 )
 
@@ -36,7 +37,7 @@ plant_table = Table(
     "plant",
     metadata,
     Column("id", Integer, primary_key=True),
-    Column("name", String, nullable=False),
+    Column("name", String(length=64), nullable=False),
     Column("humidity_sensor_id", ForeignKey("sensor.id"), nullable=False),
     Column("pump_id", Integer, nullable=False),
     Column("target", Integer, nullable=False),
@@ -88,9 +89,8 @@ def _make_generic_upset_database_entry(table, data):
                 metadata.tables[table]
             ).values(
                 data
-            ).on_conflict_do_update(
-                index_elements=["id"],
-                set_=data
+            ).on_duplicate_key_update(
+                data
             )
         )
         conn.commit()
