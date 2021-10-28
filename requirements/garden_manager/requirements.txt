@@ -1,0 +1,4 @@
+paho-mqtt==1.6
+sqlalchemy==1.4
+psycopg2==2.9
+colorama==0.4

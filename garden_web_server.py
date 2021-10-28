@@ -1,17 +1,15 @@
 """Entry point for the garden web server."""
+from pages import configuration, controls, history, overview
+import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
 import paho.mqtt.client as mqtt
 from dash.dependencies import Input, Output
-
 from app import app
-from apps import configuration, controls, history, overview
-from utils.common import get_broker_ip
 
 # MQTT client
 client = mqtt.Client("garden_web_server")
-broker_ip = ""
 
 # Global status vars
 monitor_online = False
@@ -33,7 +31,7 @@ navbar = dbc.NavbarSimple(
 app.layout = html.Div([
     dcc.Interval(
         id="app_interval",
-        interval=5*1000,  # in milliseconds
+        interval=5 * 1000,  # in milliseconds
         n_intervals=0
     ),
     dcc.Location(id='url', refresh=False),
@@ -105,8 +103,7 @@ def mqtt_record_status(client, userdata, msg):
 
 
 if __name__ == '__main__':
-    broker_ip = get_broker_ip(__file__)
-    client.connect(broker_ip)
+    client.connect("mosquitto")
     client.loop_start()
     client.message_callback_add("status/+", mqtt_record_status)
     client.subscribe("status/+", qos=2)

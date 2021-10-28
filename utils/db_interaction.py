@@ -2,11 +2,11 @@
 
 from sqlalchemy import (TIMESTAMP, Column, ForeignKey, Integer, MetaData,
                         String, Table, create_engine)
-from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.dialects.postgresql import insert
 
 # Engine used to interface the db
 engine = create_engine(
-    "mysql://garden.manager:IAmGardenManager@192.168.1.232:3306/garden_db", future=True)
+    "postgresql://postgres:password@db:5432/garden_db", future=True)
 
 # Metadata that keeps track of db schema
 metadata = MetaData()

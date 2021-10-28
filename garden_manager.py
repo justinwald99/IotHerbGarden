@@ -10,7 +10,7 @@ from datetime import datetime as dt
 import paho.mqtt.client as mqtt
 from sqlalchemy import select
 
-from utils.common import connection_message, get_broker_ip, parse_json_payload
+from utils.common import connection_message, parse_json_payload
 from utils.db_interaction import (create_plant, create_sample, create_sensor,
                                   create_watering_event, engine, initialize_db,
                                   plant_table, sensor_table, watering_table)
@@ -215,9 +215,6 @@ def publish_sensor_info():
 
 
 if (__name__ == "__main__"):
-    # Ensure that the client provided an IP for the MQTT broker
-    broker_ip = get_broker_ip(__file__)
-
     # Add callbacks to the client
     client.message_callback_add("plants/config", handle_plants_config)
     client.message_callback_add("sensors/config", handle_sensors_config)
@@ -230,7 +227,7 @@ if (__name__ == "__main__"):
                     payload="offline", qos=2, retain=True)
 
     # Create connection to MQTT broker
-    client.connect(broker_ip, keepalive=5)
+    client.connect("mosquitto", keepalive=5)
 
     # Subscribe to applicable topics
     client.subscribe([
