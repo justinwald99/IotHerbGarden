@@ -1,15 +1,17 @@
 """Monitor that runs on the pi to collect sensor data and run pumps."""
 import json
+import os
 import threading
 import time
 from datetime import datetime as dt
 
 import board
 import paho.mqtt.client as mqtt
+import yaml
 from gpiozero.output_devices import OutputDevice
 
 from utils.adc_library import ADS7830
-from utils.common import connection_message, get_broker_ip, parse_json_payload
+from utils.common import connection_message, parse_json_payload
 from utils.logging import (config_logger, mqtt_logger, pump_logger,
                            sample_logger)
 from utils.sensors import (ambient_humidity, ambient_temperature, dht_22,
@@ -19,7 +21,7 @@ from utils.sensors import (ambient_humidity, ambient_temperature, dht_22,
 client = mqtt.Client("garden_monitor")
 
 # IP for the MQTT broker
-broker_ip = ""
+broker_host = ""
 
 # Config to hold sensor config data
 sensor_config = {}
@@ -56,8 +58,8 @@ def read_config():
 
     This data needs to be reconciled with known data from sensors/info before building.
     """
-    with open("sensor_config.json", "r") as config_file:
-        config = json.loads(config_file.read())
+    with open("sensor_config.yaml", "r") as config_file:
+        config = yaml.safe_load(config_file.read())
     config_logger.info(f"Loaded config: {json.dumps(config, indent=4)}")
     return config
 
@@ -193,9 +195,9 @@ def handle_sensor_info(client, userdata, msg):
     build_sensors()
 
 
-def publish_status(client, obj, flags, rc):
+def publish_status(client, userdata=None, flags=None, rc=None):
     """Publish the status of garden_monitor."""
-    mqtt_logger.info(connection_message(broker_ip, rc))
+    mqtt_logger.info(connection_message(broker_host, rc))
     client.publish("status/garden_monitor",
                    payload="online", qos=2, retain=True)
     mqtt_logger.info("Status published")
@@ -210,9 +212,6 @@ sensors unknown to sensors info, it will post a sensors/config for each one that
 included.
 """
 if __name__ == '__main__':
-    # Check for correct execution of program
-    broker_ip = get_broker_ip(__file__)
-
     # Set garden_monitor's last will message for when it is offline.
     client.will_set("status/garden_monitor",
                     payload="offline", qos=2, retain=True)
@@ -223,7 +222,7 @@ if __name__ == '__main__':
     client.message_callback_add("sensors/info", handle_sensor_info)
 
     # Connect to the MQTT broker
-    client.connect(broker_ip, 1883)
+    client.connect(os.environ.get("MQTT_BROKER_HOST"), 1883)
 
     # Subscribe to applicable topics
     client.subscribe([
@@ -232,7 +231,7 @@ if __name__ == '__main__':
     ])
 
     # Send online message
-    publish_status()
+    publish_status(client)
 
     # Load basic values in.
     sensor_config = read_config()
